@@ -1,0 +1,60 @@
+name: plantodex
+description: A Pokédex-style plant identification app.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  image: ^4.1.7
+  # Navigation
+  go_router: ^14.2.0
+
+  # Networking
+  dio: ^5.7.0
+  retrofit: ^4.1.0
+
+  # Local DB
+  sqflite: ^2.3.3
+  path: ^1.9.0
+
+  # Image loading & caching
+  cached_network_image: ^3.4.1
+
+  # Camera
+  camera: ^0.11.0+2
+
+  # Image compression (resize to 1280px / 80% JPEG before API upload)
+  flutter_image_compress: ^2.3.0
+  path_provider: ^2.1.4
+
+  # Permissions
+  permission_handler: ^11.3.1
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+  # Google Fonts
+  google_fonts: ^6.2.1
+
+  # --- Phase 3 additions ---
+  # On-device "is this a plant?" gate
+  google_mlkit_image_labeling: ^0.13.0
+  # State management
+  provider: ^6.1.2
+  # .env API key loading
+  flutter_dotenv: ^5.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
