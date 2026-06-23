@@ -2,17 +2,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/plant_identification.dart'; // PlantIdNoMatchException
 import '../repositories/plant_repository.dart'; // PlantResult, NotAPlantException
-import '../services/plant_image_quality_service.dart'; // PoorImageQualityException
 import '../services/plantnet_service.dart'; // PlantNetQuotaExceededException
 
 enum DetectionStatus {
   idle,
-  checkingPlant, // ML Kit gate running
   identifying, // Pl@ntNet call in flight
   fetchingInfo, // Perenual call in flight
   success,
   notAPlant,
-  poorImageQuality, // on-device quality check failed
   noMatch,
   quotaExceeded,
   error,
@@ -29,15 +26,12 @@ class DetectionProvider extends ChangeNotifier {
   String? errorMessage;
 
   Future<void> identify(File photo) async {
-    status = DetectionStatus.checkingPlant;
+    status = DetectionStatus.identifying;
     errorMessage = null;
     result = null;
     notifyListeners();
 
     try {
-      status = DetectionStatus.identifying;
-      notifyListeners();
-
       final r = await _repository.identify(photo);
 
       status = DetectionStatus.fetchingInfo;
@@ -47,9 +41,6 @@ class DetectionProvider extends ChangeNotifier {
       status = DetectionStatus.success;
     } on NotAPlantException {
       status = DetectionStatus.notAPlant;
-    } on PoorImageQualityException catch (e) {
-      status = DetectionStatus.poorImageQuality;
-      errorMessage = e.userMessage;
     } on PlantIdNoMatchException {
       status = DetectionStatus.noMatch;
     } on PlantNetQuotaExceededException {

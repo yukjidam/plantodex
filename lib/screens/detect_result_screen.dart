@@ -43,7 +43,6 @@ class _DetectResultScreenState extends State<DetectResultScreen> {
         builder: (context, provider, _) {
           switch (provider.status) {
             case DetectionStatus.idle:
-            case DetectionStatus.checkingPlant:
             case DetectionStatus.identifying:
             case DetectionStatus.fetchingInfo:
               return _LoadingScaffold(status: provider.status);
@@ -55,15 +54,7 @@ class _DetectResultScreenState extends State<DetectResultScreen> {
                 primaryLabel: 'Scan again',
                 onPrimary: () => context.pop(),
               );
-            case DetectionStatus.poorImageQuality:
-              return _MessageScaffold(
-                emoji: '📷',
-                title: 'Photo needs improvement',
-                subtitle: provider.errorMessage ??
-                    'Try getting closer and making sure the plant is in focus.',
-                primaryLabel: 'Scan again',
-                onPrimary: () => context.pop(),
-              );
+
             case DetectionStatus.noMatch:
               return _MessageScaffold(
                 emoji: '🔍',
@@ -110,8 +101,6 @@ class _LoadingScaffold extends StatelessWidget {
 
   String get _message {
     switch (status) {
-      case DetectionStatus.checkingPlant:
-        return 'Checking your photo…';
       case DetectionStatus.identifying:
         return 'Identifying the species…';
       case DetectionStatus.fetchingInfo:

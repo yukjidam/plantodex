@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:ui' show Size;
+import 'dart:ui' show Size, Offset;
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'image_compress_service.dart';
@@ -58,6 +58,40 @@ class CameraService {
     if (wasStreaming) await stopImageStream();
     _activeCameraIndex = (_activeCameraIndex + 1) % _cameras.length;
     await _startController(_activeCameraIndex);
+  }
+
+  // ── Tap-to-focus ──────────────────────────────────────────────────────────
+
+  /// Moves both focus and exposure to the tapped point.
+  ///
+  /// [offset] is a normalised point in the range (0,0)→(1,1) where
+  /// (0,0) is the top-left of the sensor frame.  The caller is
+  /// responsible for converting screen tap coordinates into this space
+  /// (accounting for preview scale/offset and front-camera mirroring).
+  ///
+  /// After a brief delay the camera returns to continuous auto mode so
+  /// it stays sharp if the user moves the phone.
+  Future<void> setFocusPoint(Offset offset) async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    try {
+      await _controller!.setFocusMode(FocusMode.locked);
+      await _controller!.setExposureMode(ExposureMode.locked);
+      await _controller!.setFocusPoint(offset);
+      await _controller!.setExposurePoint(offset);
+
+      // Return to continuous auto after 4 s so the viewfinder stays sharp
+      // if the subject or phone moves.
+      Future.delayed(const Duration(seconds: 4), () async {
+        if (_controller?.value.isInitialized == true) {
+          await _controller!.setFocusMode(FocusMode.auto);
+          await _controller!.setExposureMode(ExposureMode.auto);
+          await _controller!.setFocusPoint(null);
+          await _controller!.setExposurePoint(null);
+        }
+      });
+    } catch (_) {
+      // Silently ignore — not all devices support manual focus point.
+    }
   }
 
   // ── Flash ─────────────────────────────────────────────────────────────────

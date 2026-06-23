@@ -36,18 +36,23 @@ class PoorImageQualityException implements Exception {
 /// Checks (in order):
 ///   1. Brightness  — rejects images that are too dark
 ///   2. Blur        — rejects images using a Laplacian variance score
-///   3. Coverage    — rejects images where the plant is too small / far away
-///      by checking how much of the centre crop is non-background
+///   3. Coverage    — rejects images where the frame is empty / featureless
+///      (plain sky, wall, floor) using edge-energy rather than green-pixel
+///      counting, so bark, flowers, and other non-green organs are accepted.
 class PlantImageQualityService {
   const PlantImageQualityService({
-    this.minBrightness = 40.0, // 0–255 average luminance
-    this.minBlurScore = 80.0, // Laplacian variance; lower = blurrier
-    this.minCoverage = 0.25, // fraction of centre crop that is "plant"
+    this.minBrightness = 25.0, // 0–255 average luminance
+    this.minBlurScore = 40.0, // Laplacian variance; lower = blurrier
+    this.minEdgeEnergy = 4.0, // mean absolute Laplacian in centre crop
   });
 
   final double minBrightness;
   final double minBlurScore;
-  final double minCoverage;
+  // CHANGED: replaced minCoverage (green-pixel fraction) with minEdgeEnergy
+  // (texture density). The old check rejected valid close-up crops of bark,
+  // flowers, and brown/dry stems because they contain very few green pixels.
+  // Edge energy stays high for any plant organ that fills the frame.
+  final double minEdgeEnergy;
 
   /// Throws [PoorImageQualityException] if the image fails any check.
   /// Returns normally if quality is acceptable.
@@ -120,34 +125,39 @@ class PlantImageQualityService {
   // ── Coverage (plant fills the frame) ───────────────────────────────────────
 
   void _checkCoverage(img.Image image) {
-    // Crop the centre 60% of the image and check colour diversity.
-    // A far-away plant against a large sky/background will have low
-    // green-channel dominance in the centre crop.
+    // Crop the centre 60 % of the image and measure edge energy (mean
+    // absolute Laplacian). A frame filled with a plant organ — regardless
+    // of colour — will have high texture and therefore high edge energy.
+    // A blank background (plain sky, white wall, empty floor) will score
+    // near zero and is correctly rejected.
+    //
+    // FIX: the previous implementation counted green-dominant pixels, which
+    // caused every close-up crop of bark, flowers, seeds, or dry stems to
+    // be rejected with tooFarAway even though the plant filled the frame.
     final cx = (image.width * 0.2).round();
     final cy = (image.height * 0.2).round();
     final cw = (image.width * 0.6).round();
     final ch = (image.height * 0.6).round();
 
     final crop = img.copyCrop(image, x: cx, y: cy, width: cw, height: ch);
+    final grey = img.grayscale(crop);
 
-    int greenDominant = 0;
-    final total = crop.width * crop.height;
+    double edgeSum = 0;
+    int count = 0;
 
-    for (int y = 0; y < crop.height; y++) {
-      for (int x = 0; x < crop.width; x++) {
-        final p = crop.getPixel(x, y);
-        final r = p.r.toDouble();
-        final g = p.g.toDouble();
-        final b = p.b.toDouble();
-        // A pixel is "plant-like" if green channel leads and isn't near-grey
-        if (g > r && g > b && (g - r) > 15 && (g - b) > 10) {
-          greenDominant++;
-        }
+    for (int y = 1; y < grey.height - 1; y++) {
+      for (int x = 1; x < grey.width - 1; x++) {
+        final center = grey.getPixel(x, y).r.toDouble();
+        final top = grey.getPixel(x, y - 1).r.toDouble();
+        final bottom = grey.getPixel(x, y + 1).r.toDouble();
+        final left = grey.getPixel(x - 1, y).r.toDouble();
+        final right = grey.getPixel(x + 1, y).r.toDouble();
+        edgeSum += (4 * center - top - bottom - left - right).abs();
+        count++;
       }
     }
 
-    final coverage = greenDominant / total;
-    if (coverage < minCoverage) {
+    if (count > 0 && (edgeSum / count) < minEdgeEnergy) {
       throw const PoorImageQualityException(ImageQualityFailReason.tooFarAway);
     }
   }

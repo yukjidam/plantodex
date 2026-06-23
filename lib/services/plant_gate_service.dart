@@ -3,8 +3,11 @@ import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 
 /// On-device "is this even a plant?" check using ML Kit Image Labeling.
 /// Runs before any network call, so junk photos never burn Pl@ntNet quota.
+///
+/// Intentionally broad — if the image contains a flower, leaf, or branch,
+/// it passes through and lets Pl@ntNet make the final call.
 class PlantGateService {
-  PlantGateService({double confidenceThreshold = 0.6})
+  PlantGateService({double confidenceThreshold = 0.5})
       : _labeler = ImageLabeler(
           options:
               ImageLabelerOptions(confidenceThreshold: confidenceThreshold),
@@ -12,26 +15,14 @@ class PlantGateService {
 
   final ImageLabeler _labeler;
 
-  // ML Kit's default labeler returns generic labels from its ~400-class set.
-  // These are the ones that reliably show up for plant photos.
   static const _plantKeywords = {
-    'plant',
     'flower',
-    'flowerpot',
-    'houseplant',
     'leaf',
-    'tree',
-    'flowering plant',
-    'botany',
-    'herb',
-    'shrub',
-    'flora',
-    'petal',
-    'wildflower',
-    'succulent',
+    'branch',
   };
 
-  /// Returns true if the image looks like it contains a plant.
+  /// Returns true if the image contains a flower, leaf, or branch.
+  /// Pl@ntNet handles everything beyond that.
   Future<bool> looksLikePlant(File image) async {
     final input = InputImage.fromFile(image);
     final labels = await _labeler.processImage(input);

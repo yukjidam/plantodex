@@ -27,8 +27,16 @@ class _ScanScreenState extends State<ScanScreen>
   _ScreenState _screenState = _ScreenState.checkingPermission;
   bool _isCapturing = false;
   bool _flashOn = false;
-  FrameQuality _quality = FrameQuality.tooDark;
+  // Null until the first frame is analysed, so the pill stays hidden.
+  FrameQuality? _quality;
   bool _isCropping = false;
+
+  // ── Tap-to-focus ───────────────────────────────────────────────────────────
+  // Normalised focus point (0,0)→(1,1) sent to the camera, plus the raw
+  // screen position used to draw the focus ring indicator.
+  Offset? _focusPoint; // normalised, passed to CameraService
+  Offset? _focusIndicator; // screen coordinates, for the ring widget
+  bool _showFocusRing = false;
 
   // Geometry captured from the last build, needed to map the on-screen
   // viewfinder box onto the captured photo's pixel coordinates.
@@ -246,6 +254,46 @@ class _ScanScreenState extends State<ScanScreen>
     await _startLiveQualityCheck();
   }
 
+  // ── Tap-to-focus ──────────────────────────────────────────────────────────
+
+  Future<void> _onTapToFocus(TapUpDetails details) async {
+    if (_screenState != _ScreenState.ready) return;
+
+    final previewOffset = _previewOffset;
+    final previewSize = _previewDisplaySize;
+    if (previewOffset == null || previewSize == null) return;
+
+    final tapInPreview = details.localPosition - previewOffset;
+
+    // Clamp to preview bounds before normalising.
+    final clamped = Offset(
+      tapInPreview.dx.clamp(0, previewSize.width),
+      tapInPreview.dy.clamp(0, previewSize.height),
+    );
+    var normalised = Offset(
+      clamped.dx / previewSize.width,
+      clamped.dy / previewSize.height,
+    );
+
+    // CameraPreview mirrors the front camera horizontally on screen,
+    // but the underlying sensor coordinate space is unmirrored.
+    if (_camera.isFrontCamera) {
+      normalised = Offset(1.0 - normalised.dx, normalised.dy);
+    }
+
+    setState(() {
+      _focusPoint = normalised;
+      _focusIndicator = details.localPosition;
+      _showFocusRing = true;
+    });
+
+    await _camera.setFocusPoint(normalised);
+
+    // Hide the ring after 2 s (matches typical camera UX).
+    await Future.delayed(const Duration(seconds: 2));
+    if (mounted) setState(() => _showFocusRing = false);
+  }
+
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
@@ -277,124 +325,138 @@ class _ScanScreenState extends State<ScanScreen>
     final viewfinderH = viewfinderW * 1.1;
     final controller = _camera.controller!;
 
-    return Stack(
-      key: _stackKey,
-      fit: StackFit.expand,
-      children: [
-        // Live camera preview — fills the entire screen
-        _CameraPreviewFill(
-          controller: controller,
-          onGeometryKnown: (offset, size) {
-            // Preview geometry only changes on rotation/device swap, so
-            // skip pointless rebuild churn when nothing actually moved.
-            if (_previewOffset != offset || _previewDisplaySize != size) {
-              _previewOffset = offset;
-              _previewDisplaySize = size;
-              _scheduleViewfinderRectMeasurement();
-            }
-          },
-        ),
+    return GestureDetector(
+      onTapUp: _onTapToFocus,
+      behavior: HitTestBehavior.opaque,
+      child: Stack(
+        key: _stackKey,
+        fit: StackFit.expand,
+        children: [
+          // Live camera preview — fills the entire screen
+          _CameraPreviewFill(
+            controller: controller,
+            onGeometryKnown: (offset, size) {
+              // Preview geometry only changes on rotation/device swap, so
+              // skip pointless rebuild churn when nothing actually moved.
+              if (_previewOffset != offset || _previewDisplaySize != size) {
+                _previewOffset = offset;
+                _previewDisplaySize = size;
+                _scheduleViewfinderRectMeasurement();
+              }
+            },
+          ),
 
-        // Vignette
-        Container(
-          decoration: const BoxDecoration(
-            gradient: RadialGradient(
-              center: Alignment.center,
-              radius: 1.0,
-              colors: [Colors.transparent, Color(0xBB000000)],
-              stops: [0.5, 1.0],
+          // Vignette
+          Container(
+            decoration: const BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment.center,
+                radius: 1.0,
+                colors: [Colors.transparent, Color(0xBB000000)],
+                stops: [0.5, 1.0],
+              ),
             ),
           ),
-        ),
 
-        SafeArea(
-          child: Column(
-            children: [
-              // Top bar
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _TopBtn(
-                      icon: _flashOn
-                          ? Icons.flash_on_rounded
-                          : Icons.flash_off_rounded,
-                      active: _flashOn,
-                      onTap: _toggleFlash,
-                    ),
-                    Text(
-                      'PLANTODEX',
-                      style: GoogleFonts.spaceMono(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                        letterSpacing: 3,
+          // Tap-to-focus ring — appears at the tapped screen position.
+          if (_showFocusRing && _focusIndicator != null)
+            Positioned(
+              left: _focusIndicator!.dx - 28,
+              top: _focusIndicator!.dy - 28,
+              child: const _FocusRing(),
+            ),
+
+          SafeArea(
+            child: Column(
+              children: [
+                // Top bar
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _TopBtn(
+                        icon: _flashOn
+                            ? Icons.flash_on_rounded
+                            : Icons.flash_off_rounded,
+                        active: _flashOn,
+                        onTap: _toggleFlash,
                       ),
-                    ),
-                    _TopBtn(icon: Icons.tune_rounded, onTap: () {}),
-                  ],
-                ),
-              ),
-
-              const Spacer(),
-
-              // Viewfinder overlay
-              AnimatedBuilder(
-                animation: Listenable.merge([_scanCtrl, _pulseCtrl]),
-                builder: (context, _) => KeyedSubtree(
-                  key: _viewfinderKey,
-                  child: _Viewfinder(
-                    width: viewfinderW,
-                    height: viewfinderH,
-                    scanY: _scanY.value,
-                    pulseScale: _pulseScale.value,
-                    pulseOpacity: _pulseOpacity.value,
+                      Text(
+                        'PLANTODEX',
+                        style: GoogleFonts.spaceMono(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: 3,
+                        ),
+                      ),
+                      _TopBtn(icon: Icons.tune_rounded, onTap: () {}),
+                    ],
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 24),
+                const Spacer(),
 
-              // Live "good shot" pill — reflects real-time brightness/
-              // sharpness analysis of the camera feed.
-              _QualityPill(quality: _quality),
-
-              const Spacer(),
-
-              // Bottom controls
-              Padding(
-                padding: EdgeInsets.only(
-                  left: 40,
-                  right: 40,
-                  bottom: MediaQuery.of(context).padding.bottom + 72,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    _SideBtn(
-                      icon: Icons.photo_library_outlined,
-                      label: 'Gallery',
-                      onTap: () {},
+                // Viewfinder overlay
+                AnimatedBuilder(
+                  animation: Listenable.merge([_scanCtrl, _pulseCtrl]),
+                  builder: (context, _) => KeyedSubtree(
+                    key: _viewfinderKey,
+                    child: _Viewfinder(
+                      width: viewfinderW,
+                      height: viewfinderH,
+                      scanY: _scanY.value,
+                      pulseScale: _pulseScale.value,
+                      pulseOpacity: _pulseOpacity.value,
                     ),
-                    _ShutterButton(isCapturing: _isCapturing, onTap: _capture),
-                    _SideBtn(
-                      icon: Icons.flip_camera_ios_outlined,
-                      label: 'Flip',
-                      onTap: _flipCamera,
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 24),
+
+                // Live quality pill — only shown when a plant frame is
+                // detected (non-good states that are purely about lighting
+                // or blur are still surfaced so the user can act on them).
+                _QualityPill(quality: _quality),
+
+                const Spacer(),
+
+                // Bottom controls
+                Padding(
+                  padding: EdgeInsets.only(
+                    left: 40,
+                    right: 40,
+                    bottom: MediaQuery.of(context).padding.bottom + 72,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _SideBtn(
+                        icon: Icons.photo_library_outlined,
+                        label: 'Gallery',
+                        onTap: () {},
+                      ),
+                      _ShutterButton(
+                          isCapturing: _isCapturing, onTap: _capture),
+                      _SideBtn(
+                        icon: Icons.flip_camera_ios_outlined,
+                        label: 'Flip',
+                        onTap: _flipCamera,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
-    );
+        ],
+      ), // Stack
+    ); // GestureDetector
   }
 
   // ── Loading ────────────────────────────────────────────────────────────────
@@ -742,10 +804,13 @@ class _QualityPillContent {
 
 class _QualityPill extends StatelessWidget {
   const _QualityPill({required this.quality});
-  final FrameQuality quality;
+  final FrameQuality? quality;
 
-  _QualityPillContent _contentFor(FrameQuality q) {
+  /// Returns null when no pill should be shown (no frame analysed yet).
+  _QualityPillContent? _contentFor(FrameQuality? q) {
     switch (q) {
+      case null:
+        return null;
       case FrameQuality.tooDark:
         return const _QualityPillContent(
           'Too dark — find more light',
@@ -777,41 +842,109 @@ class _QualityPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = _contentFor(quality);
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 280),
+    // Animate the pill in/out when a plant enters or leaves the frame.
+    return AnimatedOpacity(
+      opacity: content != null ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: content.color.withOpacity(0.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: Icon(
-              content.icon,
-              key: ValueKey(quality),
-              size: 14,
-              color: content.color,
-            ),
-          ),
-          const SizedBox(width: 8),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            child: Text(
-              content.label,
-              key: ValueKey('${quality}_text'),
-              style: GoogleFonts.spaceGrotesk(
-                fontSize: 13,
-                color: Colors.white.withOpacity(0.9),
-                fontWeight: FontWeight.w500,
+      child: content == null
+          ? const SizedBox(height: 36) // reserve space so layout doesn't jump
+          : AnimatedContainer(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOut,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.5),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: content.color.withOpacity(0.35)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: Icon(
+                      content.icon,
+                      key: ValueKey(quality),
+                      size: 14,
+                      color: content.color,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: Text(
+                      content.label,
+                      key: ValueKey('${quality}_text'),
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.9),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
+    );
+  }
+}
+
+// ── Tap-to-focus ring ─────────────────────────────────────────────────────────
+
+class _FocusRing extends StatefulWidget {
+  const _FocusRing();
+
+  @override
+  State<_FocusRing> createState() => _FocusRingState();
+}
+
+class _FocusRingState extends State<_FocusRing>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _scale;
+  late final Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _scale = Tween<double>(begin: 1.4, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+    _opacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeOut),
+    );
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) => Opacity(
+        opacity: _opacity.value,
+        child: Transform.scale(
+          scale: _scale.value,
+          child: Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              shape: BoxShape.rectangle,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: green300, width: 1.5),
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
