@@ -8,6 +8,7 @@ import '../theme/rarity.dart';
 import '../widgets/rarity_pill.dart';
 import '../providers/detection_provider.dart';
 import '../repositories/plant_repository.dart';
+import '../models/plant_rarity_lookup.dart';
 
 class DetectResultScreen extends StatefulWidget {
   const DetectResultScreen({super.key, required this.photo});
@@ -205,7 +206,7 @@ class _ResultScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final id = result.identification;
     final care = result.careInfo;
-    final rarity = id.confidencePercent >= 85 ? Rarity.rare : Rarity.common;
+    final rarity = rarityFor(id.scientificName);
 
     final tags = <String>[
       if (care.family != 'Unknown') care.family,
@@ -557,34 +558,7 @@ class _ResultScaffold extends StatelessWidget {
                   20, 12, 20, MediaQuery.of(context).padding.bottom + 14),
               child: Column(
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        await PlantRepository.instance.saveCatch(
-                          photo: photo,
-                          identification: result.identification,
-                          careInfo: result.careInfo,
-                        );
-                        if (context.mounted) {
-                          context.push('/catch', extra: result);
-                        }
-                      },
-                      icon: const Text('🌱', style: TextStyle(fontSize: 18)),
-                      label: Text('Pick this plant!',
-                          style: GoogleFonts.spaceGrotesk(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: green600,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 0,
-                      ),
-                    ),
-                  ),
+                  _SaveCatchButton(photo: photo, result: result),
                   const SizedBox(height: 8),
                   Row(
                     children: ['Skip', 'Save for later', 'Share']
@@ -618,6 +592,75 @@ class _ResultScaffold extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ── Save button (handles duplicate-catch validation) ──────────────────────────
+
+class _SaveCatchButton extends StatefulWidget {
+  const _SaveCatchButton({required this.photo, required this.result});
+  final File photo;
+  final PlantResult result;
+
+  @override
+  State<_SaveCatchButton> createState() => _SaveCatchButtonState();
+}
+
+class _SaveCatchButtonState extends State<_SaveCatchButton> {
+  bool _saving = false;
+
+  Future<void> _handleSave() async {
+    if (_saving) return; // guard against double-taps
+    setState(() => _saving = true);
+
+    try {
+      await PlantRepository.instance.saveCatch(
+        photo: widget.photo,
+        identification: widget.result.identification,
+        careInfo: widget.result.careInfo,
+      );
+      if (context.mounted) {
+        context.push('/catch', extra: widget.result);
+      }
+    } on DuplicateCatchException {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Already in your Dex')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton.icon(
+        onPressed: _saving ? null : _handleSave,
+        icon: _saving
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              )
+            : const Text('🌱', style: TextStyle(fontSize: 18)),
+        label: Text(_saving ? 'Saving…' : 'Pick this plant!',
+            style: GoogleFonts.spaceGrotesk(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: green600,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
       ),
     );
   }

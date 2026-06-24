@@ -1,186 +1,216 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../database/app_database.dart';
+import '../models/dex_card_data.dart';
+import '../models/dex_repository.dart';
 import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../widgets/rarity_pill.dart';
 
-class _Plant {
-  const _Plant({
-    required this.name,
-    required this.scientific,
-    required this.rarity,
-    required this.gradient,
-    this.locked = false,
-  });
-  final String name;
-  final String scientific;
-  final Rarity rarity;
-  final List<Color> gradient;
-  final bool locked;
+class DexScreen extends StatefulWidget {
+  const DexScreen({super.key});
+
+  @override
+  State<DexScreen> createState() => _DexScreenState();
 }
 
-const _recent = [
-  _Plant(
-      name: 'Blue Vanda Orchid',
-      scientific: 'Vanda coerulea',
-      rarity: Rarity.rare,
-      gradient: [Color(0xFF1A0A28), Color(0xFF3D1A6E)]),
-  _Plant(
-      name: 'Boston Fern',
-      scientific: 'Nephrolepis exaltata',
-      rarity: Rarity.common,
-      gradient: [Color(0xFF1A3010), Color(0xFF2D5A1B)]),
-  _Plant(
-      name: 'Sacred Lotus',
-      scientific: 'Nelumbo nucifera',
-      rarity: Rarity.epic,
-      gradient: [Color(0xFF1F0A14), Color(0xFF6E1A3D)]),
-  _Plant(
-      name: 'Lucky Bamboo',
-      scientific: 'Dracaena sanderiana',
-      rarity: Rarity.common,
-      gradient: [Color(0xFF0F1F08), Color(0xFF3D7A24)]),
-];
+class _DexScreenState extends State<DexScreen> {
+  Stream<DexSections>? _sectionsStream;
 
-const _legendary = [
-  _Plant(
-      name: 'Rafflesia',
-      scientific: 'Rafflesia arnoldii',
-      rarity: Rarity.legendary,
-      gradient: [Color(0xFF2A0A00), Color(0xFF8B2500)]),
-  _Plant(
-      name: '???',
-      scientific: 'Not yet found',
-      rarity: Rarity.legendary,
-      gradient: [surface2, surface2],
-      locked: true),
-];
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
 
-final _undiscovered = List.generate(
-  4,
-  (_) => const _Plant(
-      name: '???',
-      scientific: 'Not yet found',
-      rarity: Rarity.common,
-      gradient: [surface2, surface2],
-      locked: true),
-);
-
-class DexScreen extends StatelessWidget {
-  const DexScreen({super.key});
+  Future<void> _init() async {
+    final db = await AppDatabase.getInstance();
+    if (!mounted) return; // screen was popped before the DB finished opening
+    final repository = DexRepository(db.caughtPlantDao);
+    setState(() {
+      _sectionsStream = repository.watchSections();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: surface,
-      body: CustomScrollView(
-        slivers: [
-          // ── Top bar ────────────────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Container(
-              decoration: const BoxDecoration(
-                color: surface,
-                border: Border(bottom: BorderSide(color: borderColor)),
-              ),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('PlantoDex',
-                                  style: GoogleFonts.spaceMono(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w600,
-                                    color: textPrimary,
-                                  )),
-                              Text('Your botanical collection',
-                                  style: GoogleFonts.spaceGrotesk(
-                                    fontSize: 13,
-                                    color: textSecondary,
-                                  )),
-                            ],
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: green100,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text('248 XP',
+      body: _sectionsStream == null
+          ? const Center(child: CircularProgressIndicator())
+          : StreamBuilder<DexSections>(
+              stream: _sectionsStream,
+              builder: (context, snapshot) {
+                final sections = snapshot.data ?? DexSections.empty;
+                return _DexScreenBody(sections: sections);
+              },
+            ),
+    );
+  }
+}
+
+class _DexScreenBody extends StatelessWidget {
+  const _DexScreenBody({required this.sections});
+
+  final DexSections sections;
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = sections.stats;
+    final isEmpty = stats.caughtCount == 0;
+
+    return CustomScrollView(
+      slivers: [
+        // ── Top bar ────────────────────────────────────────────────────────
+        SliverToBoxAdapter(
+          child: Container(
+            decoration: const BoxDecoration(
+              color: surface,
+              border: Border(bottom: BorderSide(color: borderColor)),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('PlantoDex',
                                 style: GoogleFonts.spaceMono(
-                                  fontSize: 12,
+                                  fontSize: 22,
                                   fontWeight: FontWeight.w600,
-                                  color: green600,
+                                  color: textPrimary,
                                 )),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Stat pills
-                      const Row(
-                        children: [
-                          _StatPill('12', 'Caught'),
-                          SizedBox(width: 8),
-                          _StatPill('3', 'Rare+'),
-                          SizedBox(width: 8),
-                          _StatPill('1', 'Legendary'),
-                          SizedBox(width: 8),
-                          _StatPill('88', 'Left'),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Search bar
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 9),
-                        decoration: BoxDecoration(
-                          color: surface2,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: borderColor),
+                            Text('Your botanical collection',
+                                style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 13,
+                                  color: textSecondary,
+                                )),
+                          ],
                         ),
-                        child: Row(children: [
-                          const Icon(Icons.search, size: 16, color: textMuted),
-                          const SizedBox(width: 9),
-                          Text('Search plants…',
-                              style: GoogleFonts.spaceGrotesk(
-                                  fontSize: 14, color: textMuted)),
-                        ]),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: green100,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text('248 XP',
+                              style: GoogleFonts.spaceMono(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: green600,
+                              )),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Stat pills
+                    Row(
+                      children: [
+                        _StatPill('${stats.caughtCount}', 'Caught'),
+                        const SizedBox(width: 8),
+                        _StatPill('${stats.rarePlusCount}', 'Rare+'),
+                        const SizedBox(width: 8),
+                        _StatPill('${stats.legendaryCount}', 'Legendary'),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Search bar
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 9),
+                      decoration: BoxDecoration(
+                        color: surface2,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: borderColor),
                       ),
-                    ],
-                  ),
+                      child: Row(children: [
+                        const Icon(Icons.search, size: 16, color: textMuted),
+                        const SizedBox(width: 9),
+                        Text('Search plants…',
+                            style: GoogleFonts.spaceGrotesk(
+                                fontSize: 14, color: textMuted)),
+                      ]),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
+        ),
 
-          // ── Grid sections ──────────────────────────────────────────────────
+        // ── Grid sections ──────────────────────────────────────────────────
+        if (isEmpty)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptyState(),
+          )
+        else
           _DexSection(
-              title: 'Recent catches',
-              plants: _recent,
-              onTap: (p) => context.push('/detect')),
+            title: 'Recent catches',
+            cards: sections.recent,
+            onTap: (c) => context.push('/detect'),
+          ),
+        if (sections.legendary.isNotEmpty)
           _DexSection(
-              title: 'Legendary',
-              plants: _legendary,
-              onTap: (p) => !p.locked ? context.push('/detect') : null),
+            title: 'Legendary',
+            cards: sections.legendary,
+            onTap: (c) => !c.isLocked ? context.push('/detect') : null,
+          ),
+        if (sections.rare.isNotEmpty)
           _DexSection(
-              title: 'Undiscovered', plants: _undiscovered, onTap: (_) {}),
+            title: 'Rare',
+            cards: sections.rare,
+            onTap: (c) => !c.isLocked ? context.push('/detect') : null,
+          ),
 
-          // Bottom padding for nav bar
-          const SliverToBoxAdapter(child: SizedBox(height: 80)),
-        ],
+        // Bottom padding for nav bar
+        const SliverToBoxAdapter(child: SizedBox(height: 80)),
+      ],
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.eco_outlined, size: 40, color: textMuted),
+            const SizedBox(height: 12),
+            Text('No plants caught yet',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: textSecondary,
+                )),
+            const SizedBox(height: 4),
+            Text('Scan a plant to start your collection',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 12,
+                  color: textMuted,
+                )),
+          ],
+        ),
       ),
     );
   }
@@ -188,10 +218,10 @@ class DexScreen extends StatelessWidget {
 
 class _DexSection extends StatelessWidget {
   const _DexSection(
-      {required this.title, required this.plants, required this.onTap});
+      {required this.title, required this.cards, required this.onTap});
   final String title;
-  final List<_Plant> plants;
-  final void Function(_Plant) onTap;
+  final List<DexCardData> cards;
+  final void Function(DexCardData) onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -216,8 +246,8 @@ class _DexSection extends StatelessWidget {
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
             childAspectRatio: 0.88,
-            children: plants
-                .map((p) => _DexCard(plant: p, onTap: () => onTap(p)))
+            children: cards
+                .map((c) => _DexCard(card: c, onTap: () => onTap(c)))
                 .toList(),
           ),
           const SizedBox(height: 8),
@@ -228,14 +258,16 @@ class _DexSection extends StatelessWidget {
 }
 
 class _DexCard extends StatelessWidget {
-  const _DexCard({required this.plant, required this.onTap});
-  final _Plant plant;
+  const _DexCard({required this.card, required this.onTap});
+  final DexCardData card;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final rarity = card.rarity;
+
     return GestureDetector(
-      onTap: plant.locked ? null : onTap,
+      onTap: card.isLocked ? null : onTap,
       child: Container(
         decoration: BoxDecoration(
           color: surface,
@@ -251,28 +283,23 @@ class _DexCard extends StatelessWidget {
               height: 90,
               child: Stack(
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: plant.locked ? surface2 : null,
-                      gradient: plant.locked
-                          ? null
-                          : LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: plant.gradient,
-                            ),
-                    ),
-                    child: plant.locked
-                        ? const Center(
-                            child: Icon(Icons.lock_outline,
-                                size: 30, color: textMuted))
-                        : Center(child: _PlantMiniIcon(plant.rarity)),
+                  Positioned.fill(
+                    child: card.isLocked
+                        ? _LockedFallback(rarity: rarity)
+                        : (card.photoPath?.isNotEmpty ?? false)
+                            ? Image.file(
+                                File(card.photoPath!),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    _CardFallback(rarity: rarity),
+                              )
+                            : _CardFallback(rarity: rarity),
                   ),
-                  if (!plant.locked)
+                  if (!card.isLocked)
                     Positioned(
                       top: 7,
                       right: 7,
-                      child: RarityBadge(plant.rarity),
+                      child: RarityBadge(rarity),
                     ),
                 ],
               ),
@@ -283,26 +310,70 @@ class _DexCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(plant.name,
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: plant.locked ? textMuted : textPrimary,
-                        height: 1.2,
-                      )),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(card.commonName,
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: card.isLocked ? textMuted : textPrimary,
+                              height: 1.2,
+                            )),
+                      ),
+                      if (card.isLocked)
+                        const Icon(Icons.lock_outline,
+                            size: 13, color: textMuted),
+                    ],
+                  ),
                   const SizedBox(height: 2),
-                  Text(plant.scientific,
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 11,
-                        color: textMuted,
-                        fontStyle: FontStyle.italic,
-                      )),
+                  Text(
+                    card.isLocked
+                        ? 'Not yet found'
+                        : (card.scientificName ?? ''),
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 11,
+                      color: textMuted,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Shown for a locked target card — a hint that something is out there
+/// without revealing what it looks like.
+class _LockedFallback extends StatelessWidget {
+  const _LockedFallback({required this.rarity});
+  final Rarity rarity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: surface2,
+      child: const Center(
+        child: Icon(Icons.lock_outline, size: 30, color: textMuted),
+      ),
+    );
+  }
+}
+
+/// Shown when a caught plant has no usable photo (missing/broken path).
+class _CardFallback extends StatelessWidget {
+  const _CardFallback({required this.rarity});
+  final Rarity rarity;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: rarity.background,
+      child: Center(child: _PlantMiniIcon(rarity)),
     );
   }
 }

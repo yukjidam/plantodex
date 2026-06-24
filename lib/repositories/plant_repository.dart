@@ -7,9 +7,9 @@ import '../database/app_database.dart';
 import '../models/caught_plant.dart';
 import '../models/plant_identification.dart';
 import '../models/plant_care_info.dart';
+import '../models/plant_rarity_lookup.dart';
 import '../services/plantnet_service.dart';
 import '../services/wikipedia_service.dart';
-import '../theme/rarity.dart';
 
 // ── Result wrapper ─────────────────────────────────────────────────────────────
 
@@ -32,6 +32,14 @@ class NotAPlantException implements Exception {
   const NotAPlantException();
   @override
   String toString() => 'Image does not appear to contain a plant.';
+}
+
+/// Thrown when the user tries to save a plant they've already caught.
+class DuplicateCatchException implements Exception {
+  const DuplicateCatchException(this.scientificName);
+  final String scientificName;
+  @override
+  String toString() => '$scientificName is already in your Dex.';
 }
 
 // ── Repository ─────────────────────────────────────────────────────────────────
@@ -89,12 +97,14 @@ class PlantRepository {
     required PlantIdentification identification,
     required PlantCareInfo careInfo,
   }) async {
+    if (await alreadyCaught(identification.scientificName)) {
+      throw DuplicateCatchException(identification.scientificName);
+    }
+
     final savedPhotoPath =
         await _savePhoto(photo, identification.scientificName);
 
-    final rarity = identification.confidencePercent >= 85
-        ? Rarity.rare.name
-        : Rarity.common.name;
+    final rarity = rarityFor(identification.scientificName).name;
 
     final plant = CaughtPlant(
       commonName: identification.commonName,
