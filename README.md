@@ -2,7 +2,7 @@
 
 **PlantoDex** is a Pokémon GO-inspired Android app for plants. Scan a plant with your camera, let the API identify it, and "catch" it into your personal Dex, complete with rarity badges, species info, and a growing collection to discover.
 
-> 🚧 **Status:** In active development, currently in **Phase 3 (API Integration)**, optimizing the identification APIs.
+> 🚧 **Status:** In active development, currently in **Phase 5 (Dex Screen)**, optimizing the Dex Screen and local database.
 
 ---
 
@@ -30,10 +30,12 @@ Point your camera at a plant, snap a photo, and the app identifies the species a
 
 ## APIs
 
-| API | Purpose |
-|---|---|
-| [PlantNet](https://my.plantnet.org/) | Plant identification from photo |
-| [Perenual](https://perenual.com/) | Plant species info (care, details) for the identified result |
+| API          | Purpose                                             | Status     |
+| ------------ | --------------------------------------------------- | ---------- |
+| PlantNet     | Plant identification from photo                     | ✅ Current  |
+| ~~Perenual~~ | Plant species information                           | ❌ Replaced |
+| ~~Trefle~~   | Plant species information                           | ❌ Replaced |
+| Wikipedia    | Plant information, descriptions, and reference data | ✅ Current  |
 
 ---
 
@@ -65,15 +67,15 @@ Four-tab bottom navigation shell:
 - [x] Build the loading → result UI flow after capture
 - [x] Add the offline check + "no signal" blocking state before allowing a scan
 
-### Phase 4 — Catch Result + Storage 🚧 *(in progress)*
-- [ ] Build the "catch" result screen (name, scientific name, rarity badge) from the API response
-- [ ] Set up Room database and schema for caught plants
-- [ ] Save successful catches to Room
+### Phase 4 — Catch Result + Storage 
+- [x] Build the "catch" result screen (name, scientific name, rarity badge) from the API response
+- [x] Set up Room database and schema for caught plants
+- [x] Save successful catches to Room
 
-### Phase 5 — Dex Screen
-- [ ] Build the Dex grid UI, backed by a Room Flow query
-- [ ] Add sections (Recent / Legendary / Undiscovered) and locked-card states
-- [ ] Add search over saved plants
+### Phase 5 — Dex Screen 🚧 *(in progress, currently optimizing)*
+- [x] Build the Dex grid UI, backed by a Room Flow query
+- [x] Add sections (Recent / Legendary / Undiscovered) and locked-card states
+- [x] Add search over saved plants
 
 ### Phase 6 — Polish
 - [ ] Port the rarity color theming from the HTML mockup's CSS variables into Compose
