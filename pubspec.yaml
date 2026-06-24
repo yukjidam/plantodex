@@ -9,7 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+    
+  connectivity_plus: ^6.0.0
   image: ^4.1.7
   # Navigation
   go_router: ^14.2.0
