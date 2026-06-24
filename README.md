@@ -30,10 +30,12 @@ Point your camera at a plant, snap a photo, and the app identifies the species a
 
 ## APIs
 
-| API | Purpose |
-|---|---|
-| [PlantNet](https://my.plantnet.org/) | Plant identification from photo |
-| [Perenual](https://perenual.com/) | Plant species info (care, details) for the identified result |
+| API          | Purpose                                             | Status     |
+| ------------ | --------------------------------------------------- | ---------- |
+| PlantNet     | Plant identification from photo                     | ✅ Current  |
+| ~~Perenual~~ | Plant species information                           | ❌ Replaced |
+| ~~Trefle~~   | Plant species information                           | ❌ Replaced |
+| Wikipedia    | Plant information, descriptions, and reference data | ✅ Current  |
 
 ---
 
