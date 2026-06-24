@@ -3,10 +3,10 @@
 # 🌿 PlantoDex
 
 **A Pokémon GO-inspired plant collection app for Android.**  
-Point your camera at a plant, identify it, and catch it into your growing personal Dex — complete with rarity badges, species info, and a world of flora to discover.
+Point your camera at a plant, identify it, and catch it into your growing personal Dex - complete with rarity badges, species info, and a world of flora to discover.
 
 ![Status](https://img.shields.io/badge/status-active%20development-brightgreen)
-![Phase](https://img.shields.io/badge/phase-5%20%E2%80%94%20Dex%20Screen-blue)
+![Phase](https://img.shields.io/badge/phase-5%20Dex%20Screen-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
 ![Language](https://img.shields.io/badge/language-Kotlin-7F52FF?logo=kotlin&logoColor=white)
 
@@ -36,7 +36,7 @@ Every scan adds to a personal collection instead of disappearing into a search h
 📷 Scan  →  🔍 Identify  →  ✨ Catch  →  📖 Collect
 ```
 
-Everything else — the map, the profile, the streaks — is in service of this loop, not a distraction from it.
+Everything else - the map, the profile, the streaks - is in service of this loop, not a distraction from it.
 
 ---
 
@@ -76,33 +76,33 @@ Four-tab bottom navigation:
 
 ## Roadmap
 
-### ✅ Phase 1 — Skeleton
+### ✅ Phase 1 - Skeleton
 - Compose project setup with all dependencies
 - 4-screen navigation shell (Scan / Dex / Map / Profile) with bottom nav
 - Stub screens with placeholder content
 
-### ✅ Phase 2 — Camera
+### ✅ Phase 2 - Camera
 - CameraX preview + capture on the Scan screen
 - Camera permissions and lifecycle binding
 - Client-side image resize/compression after capture
 
-### ✅ Phase 3 — API Integration
+### ✅ Phase 3 - API Integration
 - Retrofit interfaces for identify and info endpoints
 - Loading → result UI flow after capture
 - Offline check + "no signal" blocking state
 
-### ✅ Phase 4 — Catch Result + Storage
+### ✅ Phase 4 - Catch Result + Storage
 - Catch result screen (name, scientific name, rarity badge)
 - Room database schema for caught plants
 - Save successful catches to Room
 
-### 🚧 Phase 5 — Dex Screen *(in progress)*
+### 🚧 Phase 5 - Dex Screen *(in progress)*
 - [x] Dex grid UI backed by a Room Flow query
 - [x] Sections: Recent / Legendary / Undiscovered + locked-card states
 - [x] Search over saved plants
 - [ ] Performance optimization
 
-### 🔲 Phase 6 — Polish
+### 🔲 Phase 6 - Polish
 - [ ] Port rarity color theming from HTML mockup into Compose
 - [ ] Catch and scan animations
 - [ ] Refined empty/locked states
@@ -117,7 +117,7 @@ Four-tab bottom navigation:
 ## Goals
 
 - **Make learning about plants feel like progress**, not a chore.
-- **Borrow what makes collecting games satisfying** — rarity tiers, a Dex to fill, a sense of "what haven't I found yet" — and apply it to something genuinely useful.
+- **Borrow what makes collecting games satisfying** - rarity tiers, a Dex to fill, a sense of "what haven't I found yet" - and apply it to something genuinely useful.
 - **Encourage going outside and looking closer.** Every walk is a chance to find a new catch.
 - **Keep the core loop simple.** Scan → identify → catch → collect.
 
