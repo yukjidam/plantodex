@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -23,18 +22,14 @@ class _ScanScreenState extends State<ScanScreen>
   // ── Services ───────────────────────────────────────────────────────────────
   final _camera = CameraService();
   final _frameQuality = FrameQualityService();
-  final _connectivity = Connectivity();
 
   // ── State ──────────────────────────────────────────────────────────────────
   _ScreenState _screenState = _ScreenState.checkingPermission;
   bool _isCapturing = false;
   bool _flashOn = false;
-  bool _isOffline = false;
   // Null until the first frame is analysed, so the pill stays hidden.
   FrameQuality? _quality;
   bool _isCropping = false;
-
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   // ── Tap-to-focus ───────────────────────────────────────────────────────────
   // Normalised focus point (0,0)→(1,1) sent to the camera, plus the raw
@@ -111,26 +106,7 @@ class _ScanScreenState extends State<ScanScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initAnimations();
-    _initConnectivity();
     _initCamera();
-  }
-
-  // ── Connectivity ──────────────────────────────────────────────────────────
-
-  Future<void> _initConnectivity() async {
-    // Snapshot the current status immediately.
-    final results = await _connectivity.checkConnectivity();
-    if (mounted) setState(() => _isOffline = _resultsAreOffline(results));
-
-    // Then keep watching for changes (airplane mode, WiFi drop, etc.).
-    _connectivitySub = _connectivity.onConnectivityChanged.listen((results) {
-      if (mounted) setState(() => _isOffline = _resultsAreOffline(results));
-    });
-  }
-
-  static bool _resultsAreOffline(List<ConnectivityResult> results) {
-    return results.isEmpty ||
-        results.every((r) => r == ConnectivityResult.none);
   }
 
   void _initAnimations() {
@@ -211,7 +187,6 @@ class _ScanScreenState extends State<ScanScreen>
     _scanCtrl.dispose();
     _pulseCtrl.dispose();
     _qualitySub?.cancel();
-    _connectivitySub?.cancel();
     _frameQuality.dispose();
     _camera.dispose();
     super.dispose();
@@ -221,35 +196,6 @@ class _ScanScreenState extends State<ScanScreen>
 
   Future<void> _capture() async {
     if (_isCapturing || _screenState != _ScreenState.ready) return;
-
-    // Block the scan if there is no network — the identify/info pipeline
-    // requires connectivity and will fail without it.
-    if (_isOffline) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.wifi_off_rounded,
-                    color: Colors.white, size: 18),
-                const SizedBox(width: 10),
-                Text(
-                  'No internet connection',
-                  style: GoogleFonts.spaceGrotesk(color: Colors.white),
-                ),
-              ],
-            ),
-            backgroundColor: const Color(0xFF1E1E1E),
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-      return;
-    }
-
     setState(() => _isCapturing = true);
 
     try {
@@ -420,71 +366,6 @@ class _ScanScreenState extends State<ScanScreen>
               child: const _FocusRing(),
             ),
 
-          // ── No-signal blocking overlay ─────────────────────────────────
-          if (_isOffline)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: SafeArea(
-                top: false,
-                child: Container(
-                  margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xCC0E0E0E),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.08),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade900.withOpacity(0.35),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.wifi_off_rounded,
-                          color: Colors.redAccent,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'No signal',
-                              style: GoogleFonts.spaceGrotesk(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Connect to the internet to identify plants.',
-                              style: GoogleFonts.spaceGrotesk(
-                                fontSize: 12,
-                                color: Colors.white54,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
           SafeArea(
             child: Column(
               children: [
@@ -560,11 +441,8 @@ class _ScanScreenState extends State<ScanScreen>
                         label: 'Gallery',
                         onTap: () {},
                       ),
-                      Opacity(
-                        opacity: _isOffline ? 0.35 : 1.0,
-                        child: _ShutterButton(
-                            isCapturing: _isCapturing, onTap: _capture),
-                      ),
+                      _ShutterButton(
+                          isCapturing: _isCapturing, onTap: _capture),
                       _SideBtn(
                         icon: Icons.flip_camera_ios_outlined,
                         label: 'Flip',
@@ -726,7 +604,17 @@ class _CameraPreviewFill extends StatelessWidget {
       builder: (context, constraints) {
         final screenW = constraints.maxWidth;
         final screenH = constraints.maxHeight;
-        final previewRatio = controller.value.aspectRatio;
+
+        // controller.value.aspectRatio is the sensor's native ratio, which
+        // on Android is always landscape (e.g. 1.777 for 16:9). CameraPreview
+        // rotates the feed to match device orientation internally, so when the
+        // phone is portrait the effective displayed ratio is the reciprocal.
+        // We detect this by checking whether the screen itself is portrait and
+        // the raw ratio is > 1 (landscape), and flip accordingly.
+        final rawRatio = controller.value.aspectRatio;
+        final isScreenPortrait = screenH >= screenW;
+        final previewRatio =
+            (isScreenPortrait && rawRatio > 1) ? 1.0 / rawRatio : rawRatio;
 
         double previewW, previewH;
         if (screenH / screenW > 1 / previewRatio) {

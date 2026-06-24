@@ -7,12 +7,10 @@ import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../widgets/rarity_pill.dart';
 import '../providers/detection_provider.dart';
-import '../repositories/plant_repository.dart'; // PlantResult
+import '../repositories/plant_repository.dart';
 
 class DetectResultScreen extends StatefulWidget {
   const DetectResultScreen({super.key, required this.photo});
-
-  /// Captured/selected photo, passed in via `context.push('/detect', extra: file)`.
   final File photo;
 
   @override
@@ -54,13 +52,12 @@ class _DetectResultScreenState extends State<DetectResultScreen> {
                 primaryLabel: 'Scan again',
                 onPrimary: () => context.pop(),
               );
-
             case DetectionStatus.noMatch:
               return _MessageScaffold(
                 emoji: '🔍',
                 title: "Couldn't identify this one",
                 subtitle:
-                    'Pl@ntNet didn\'t find a confident match. Try a clearer or closer shot.',
+                    "Pl\u0040ntNet didn't find a confident match. Try a clearer or closer shot.",
                 primaryLabel: 'Scan again',
                 onPrimary: () => context.pop(),
               );
@@ -93,7 +90,7 @@ class _DetectResultScreenState extends State<DetectResultScreen> {
   }
 }
 
-// ── Loading state ────────────────────────────────────────────────────────────
+// ── Loading ───────────────────────────────────────────────────────────────────
 
 class _LoadingScaffold extends StatelessWidget {
   const _LoadingScaffold({required this.status});
@@ -120,11 +117,9 @@ class _LoadingScaffold extends StatelessWidget {
           children: [
             const CircularProgressIndicator(color: green600, strokeWidth: 2.5),
             const SizedBox(height: 18),
-            Text(
-              _message,
-              style:
-                  GoogleFonts.spaceGrotesk(fontSize: 14, color: textSecondary),
-            ),
+            Text(_message,
+                style: GoogleFonts.spaceGrotesk(
+                    fontSize: 14, color: textSecondary)),
           ],
         ),
       ),
@@ -132,7 +127,7 @@ class _LoadingScaffold extends StatelessWidget {
   }
 }
 
-// ── Error / not-a-plant / no-match / quota / quality states ─────────────────
+// ── Error / message states ────────────────────────────────────────────────────
 
 class _MessageScaffold extends StatelessWidget {
   const _MessageScaffold({
@@ -162,25 +157,17 @@ class _MessageScaffold extends StatelessWidget {
               children: [
                 Text(emoji, style: const TextStyle(fontSize: 48)),
                 const SizedBox(height: 18),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: textPrimary,
-                  ),
-                ),
+                Text(title,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary)),
                 const SizedBox(height: 8),
-                Text(
-                  subtitle,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 14,
-                    color: textSecondary,
-                    height: 1.5,
-                  ),
-                ),
+                Text(subtitle,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14, color: textSecondary, height: 1.5)),
                 const SizedBox(height: 26),
                 SizedBox(
                   width: 220,
@@ -190,15 +177,12 @@ class _MessageScaffold extends StatelessWidget {
                       backgroundColor: green600,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
+                          borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: Text(
-                      primaryLabel,
-                      style:
-                          GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600),
-                    ),
+                    child: Text(primaryLabel,
+                        style: GoogleFonts.spaceGrotesk(
+                            fontWeight: FontWeight.w600)),
                   ),
                 ),
               ],
@@ -221,43 +205,76 @@ class _ResultScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final id = result.identification;
     final care = result.careInfo;
-
     final rarity = id.confidencePercent >= 85 ? Rarity.rare : Rarity.common;
 
     final tags = <String>[
-      id.family,
-      if (care.indoor) 'Indoor' else 'Outdoor',
-      if (care.poisonousToPets) 'Toxic to pets',
-      care.cycle,
+      if (care.family != 'Unknown') care.family,
+      if (care.duration.isNotEmpty) care.duration.first,
+      if (care.edible) 'Edible',
+      if (care.toxicity == 'medium' || care.toxicity == 'high')
+        'Toxic (${care.toxicity})',
     ];
 
     return Scaffold(
       backgroundColor: surface,
       body: Stack(
         children: [
-          Column(
-            children: [
-              // ── Hero ───────────────────────────────────────────────────
-              SizedBox(
-                height: 260,
-                child: Stack(
-                  children: [
-                    Container(
-                      decoration: const BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFF0D1F0A),
-                            Color(0xFF1E4012),
-                            Color(0xFF0A180A),
-                          ],
+          // ── Scrollable body ───────────────────────────────────────
+          CustomScrollView(
+            slivers: [
+              // ── Hero image ────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 380,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(photo,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          height: double.infinity),
+
+                      // Top scrim
+                      Positioned(
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: 120,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.55),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 16, top: 4),
+
+                      // Bottom scrim
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 100,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.topCenter,
+                              colors: [surface, Colors.transparent],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Back button
+                      Positioned(
+                        top: MediaQuery.of(context).padding.top + 8,
+                        left: 16,
                         child: GestureDetector(
                           onTap: () => context.pop(),
                           child: Container(
@@ -272,113 +289,141 @@ class _ResultScaffold extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      top: MediaQuery.of(context).padding.top + 14,
-                      right: 14,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border:
-                              Border.all(color: Colors.white.withOpacity(0.2)),
-                        ),
-                        child: Text('NEW FIND',
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                              letterSpacing: 1,
-                            )),
-                      ),
-                    ),
-                    Center(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.file(
-                          photo,
-                          width: 130,
-                          height: 160,
-                          fit: BoxFit.cover,
+
+                      // NEW FIND badge
+                      Positioned(
+                        top: MediaQuery.of(context).padding.top + 14,
+                        right: 14,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.2)),
+                          ),
+                          child: Text('NEW FIND',
+                              style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                  letterSpacing: 1)),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      bottom: 14,
-                      right: 14,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: green600.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(20),
+
+                      // Confidence badge
+                      Positioned(
+                        bottom: 14,
+                        right: 14,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: green600.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text('${id.confidencePercent}% match',
+                              style: GoogleFonts.spaceMono(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white)),
                         ),
-                        child: Text('${id.confidencePercent}% match',
-                            style: GoogleFonts.spaceMono(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            )),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
 
-              // ── Scrollable content ────────────────────────────────────
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 200),
+              // ── Content ───────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 200),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       RarityPill(rarity),
                       const SizedBox(height: 10),
+
+                      // Common name + scientific name
                       Text(id.commonName,
                           style: GoogleFonts.spaceGrotesk(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w600,
-                            color: textPrimary,
-                          )),
+                              fontSize: 26,
+                              fontWeight: FontWeight.w600,
+                              color: textPrimary)),
                       Text(id.scientificName,
                           style: GoogleFonts.spaceGrotesk(
-                            fontSize: 14,
-                            color: textSecondary,
-                            fontStyle: FontStyle.italic,
-                          )),
+                              fontSize: 14,
+                              color: textSecondary,
+                              fontStyle: FontStyle.italic)),
+
                       const SizedBox(height: 14),
-                      Wrap(
-                        spacing: 7,
-                        runSpacing: 7,
-                        children: tags
-                            .map((tag) => Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 11, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: green100,
-                                    borderRadius: BorderRadius.circular(12),
+
+                      // Tags
+                      if (tags.isNotEmpty) ...[
+                        Wrap(
+                          spacing: 7,
+                          runSpacing: 7,
+                          children: tags
+                              .map((tag) => Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 11, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: green100,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Text(tag,
+                                        style: GoogleFonts.spaceGrotesk(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                            color: green600)),
+                                  ))
+                              .toList(),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Genus-level fallback notice
+                      if (care.isGenusLevel) ...[
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 14),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 9),
+                          decoration: BoxDecoration(
+                            color: green100,
+                            borderRadius: BorderRadius.circular(10),
+                            border:
+                                Border.all(color: green600.withOpacity(0.25)),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('🌿', style: TextStyle(fontSize: 14)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  care.genusName != null
+                                      ? 'Showing general info for the ${care.genusName} genus — no dedicated page found for this specific species.'
+                                      : 'Showing general genus-level info — no dedicated page found for this specific species.',
+                                  style: GoogleFonts.spaceGrotesk(
+                                    fontSize: 12,
+                                    color: green600,
+                                    height: 1.5,
                                   ),
-                                  child: Text(tag,
-                                      style: GoogleFonts.spaceGrotesk(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: green600,
-                                      )),
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 16),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      // Stat boxes
                       Row(
                         children: [
-                          _StatBox(label: 'Watering', value: care.watering),
+                          _StatBox(label: 'Light', value: care.lightLabel),
                           const SizedBox(width: 8),
                           _StatBox(
-                              label: 'Sunlight',
-                              value: care.sunlight.isNotEmpty
-                                  ? care.sunlight.first.replaceAll('_', ' ')
-                                  : 'Unknown'),
+                              label: 'Humidity', value: care.humidityLabel),
                           const SizedBox(width: 8),
                           const _StatBox(
                               label: 'XP reward',
@@ -386,7 +431,10 @@ class _ResultScaffold extends StatelessWidget {
                               valueGreen: true),
                         ],
                       ),
+
                       const SizedBox(height: 16),
+
+                      // ID confidence bar
                       Row(
                         children: [
                           Text('ID confidence',
@@ -408,36 +456,83 @@ class _ResultScaffold extends StatelessWidget {
                           const SizedBox(width: 10),
                           Text('${id.confidencePercent}%',
                               style: GoogleFonts.spaceMono(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: green600,
-                              )),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: green600)),
                         ],
                       ),
+
                       const SizedBox(height: 18),
                       const Divider(color: borderColor),
-                      const SizedBox(height: 14),
-                      Text(
-                        care.description.isNotEmpty
+                      const SizedBox(height: 6),
+
+                      // ── Expandable info sections ──────────────────
+
+                      // Overview (always shown, not collapsible — it's short)
+                      _InfoSection(
+                        icon: '🌿',
+                        title: 'Overview',
+                        body: care.description.isNotEmpty
                             ? care.description
-                            : 'No additional description available for this species yet.',
-                        style: GoogleFonts.spaceGrotesk(
-                          fontSize: 14,
-                          color: textSecondary,
-                          height: 1.65,
-                        ),
+                            : 'No description available for this species yet.',
+                        initiallyExpanded: true,
                       ),
-                      if (care.poisonousToHumans) ...[
-                        const SizedBox(height: 14),
-                        Text(
-                          '⚠️ This plant is potentially toxic to humans if ingested.',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 13,
-                            color: amber,
-                            height: 1.5,
+
+                      // Toxicity warning inline under overview when severe
+                      if (care.toxicity == 'medium' ||
+                          care.toxicity == 'high') ...[
+                        const SizedBox(height: 6),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            '⚠️ This plant has ${care.toxicity} toxicity — use caution around pets and children.',
+                            style: GoogleFonts.spaceGrotesk(
+                                fontSize: 13, color: amber, height: 1.5),
                           ),
                         ),
                       ],
+
+                      if (care.habitat != null)
+                        _InfoSection(
+                          icon: '🗺️',
+                          title: 'Habitat & Distribution',
+                          body: care.habitat!,
+                        ),
+
+                      if (care.careTips != null)
+                        _InfoSection(
+                          icon: '🪴',
+                          title: 'Care Tips',
+                          body: care.careTips!,
+                        ),
+
+                      if (care.propagation != null)
+                        _InfoSection(
+                          icon: '🌱',
+                          title: 'Propagation',
+                          body: care.propagation!,
+                        ),
+
+                      if (care.floweringSeason != null)
+                        _InfoSection(
+                          icon: '🌸',
+                          title: 'Flowering & Season',
+                          body: care.floweringSeason!,
+                        ),
+
+                      if (care.conservationStatus != null)
+                        _InfoSection(
+                          icon: '🛡️',
+                          title: 'Conservation',
+                          body: care.conservationStatus!,
+                        ),
+
+                      if (care.funFacts != null)
+                        _InfoSection(
+                          icon: '✨',
+                          title: 'Fun Facts',
+                          body: care.funFacts!,
+                        ),
                     ],
                   ),
                 ),
@@ -445,7 +540,7 @@ class _ResultScaffold extends StatelessWidget {
             ],
           ),
 
-          // ── CTA bar ──────────────────────────────────────────────────
+          // ── CTA bar ──────────────────────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
@@ -466,14 +561,22 @@ class _ResultScaffold extends StatelessWidget {
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: () => context.push('/catch', extra: result),
+                      onPressed: () async {
+                        await PlantRepository.instance.saveCatch(
+                          photo: photo,
+                          identification: result.identification,
+                          careInfo: result.careInfo,
+                        );
+                        if (context.mounted) {
+                          context.push('/catch', extra: result);
+                        }
+                      },
                       icon: const Text('🌱', style: TextStyle(fontSize: 18)),
                       label: Text('Pick this plant!',
                           style: GoogleFonts.spaceGrotesk(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          )),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: green600,
                         shape: RoundedRectangleBorder(
@@ -516,6 +619,113 @@ class _ResultScaffold extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Expandable info section tile ──────────────────────────────────────────────
+
+class _InfoSection extends StatefulWidget {
+  const _InfoSection({
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.initiallyExpanded = false,
+  });
+
+  final String icon;
+  final String title;
+  final String body;
+  final bool initiallyExpanded;
+
+  @override
+  State<_InfoSection> createState() => _InfoSectionState();
+}
+
+class _InfoSectionState extends State<_InfoSection>
+    with SingleTickerProviderStateMixin {
+  late bool _expanded;
+  late final AnimationController _ctrl;
+  late final Animation<double> _rotate;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initiallyExpanded;
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      value: _expanded ? 1.0 : 0.0,
+    );
+    _rotate = Tween<double>(begin: 0, end: 0.5).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeIn);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    _expanded ? _ctrl.forward() : _ctrl.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 4),
+        InkWell(
+          onTap: _toggle,
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+            child: Row(
+              children: [
+                Text(widget.icon, style: const TextStyle(fontSize: 16)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary,
+                    ),
+                  ),
+                ),
+                RotationTransition(
+                  turns: _rotate,
+                  child: const Icon(Icons.keyboard_arrow_down,
+                      size: 20, color: textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ),
+        SizeTransition(
+          sizeFactor: _fade,
+          axisAlignment: -1,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 4, right: 4, bottom: 10),
+            child: Text(
+              widget.body,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 14,
+                color: textSecondary,
+                height: 1.65,
+              ),
+            ),
+          ),
+        ),
+        const Divider(color: borderColor, height: 1),
+      ],
     );
   }
 }

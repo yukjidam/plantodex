@@ -1,80 +1,190 @@
 import 'dart:io';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import '../models/plant_care_info.dart';
-import '../models/plant_identification.dart';
-import '../services/perenual_service.dart';
-import '../services/plant_cache_db.dart';
-import '../services/plantnet_service.dart';
 
-/// Bundled result of the full identify → enrich pipeline.
+import '../database/app_database.dart';
+import '../models/caught_plant.dart';
+import '../models/plant_identification.dart';
+import '../models/plant_care_info.dart';
+import '../services/plantnet_service.dart';
+import '../services/wikipedia_service.dart';
+import '../theme/rarity.dart';
+
+// ── Result wrapper ─────────────────────────────────────────────────────────────
+
+/// Bundles the Pl@ntNet identification with the Wikipedia care info so
+/// the UI only needs one object from the repository.
 class PlantResult {
-  const PlantResult({required this.identification, required this.careInfo});
+  const PlantResult({
+    required this.identification,
+    required this.careInfo,
+  });
+
   final PlantIdentification identification;
   final PlantCareInfo careInfo;
 }
 
-/// Raised when Pl@ntNet determines the photo is not a plant.
+// ── Exceptions ─────────────────────────────────────────────────────────────────
+
+/// Thrown when the image doesn't appear to contain a plant.
 class NotAPlantException implements Exception {
   const NotAPlantException();
   @override
-  String toString() => "That doesn't look like a plant.";
+  String toString() => 'Image does not appear to contain a plant.';
 }
+
+// ── Repository ─────────────────────────────────────────────────────────────────
 
 class PlantRepository {
   PlantRepository({
-    PlantNetService? plantNet,
-    PerenualService? perenual,
-    PlantCacheDb? cache,
-  })  : _plantNet = plantNet ?? PlantNetService(),
-        _perenual = perenual ?? PerenualService(),
-        _cache = cache ?? PlantCacheDb.instance;
+    PlantNetService? plantNetService,
+    WikipediaService? wikipediaService,
+  })  : _plantNet = plantNetService ?? PlantNetService(),
+        _wikipedia = wikipediaService ?? WikipediaService();
+
+  static final PlantRepository instance = PlantRepository();
 
   final PlantNetService _plantNet;
-  final PerenualService _perenual;
-  final PlantCacheDb _cache;
+  final WikipediaService _wikipedia;
 
-  /// Full pipeline:
-  ///   1. Compress         — resize before upload
-  ///   2. Pl@ntNet ID      — species identification
-  ///   3. Perenual         — care info (cached)
-  ///
-  /// Throws [NotAPlantException], [PlantIdNoMatchException],
-  /// or [PlantNetQuotaExceededException] as needed.
+  AppDatabase? _db;
+
+  Future<AppDatabase> get _database async {
+    _db ??= await AppDatabase.getInstance();
+    return _db!;
+  }
+
+  // ── Identification flow ────────────────────────────────────────────────────
+
+  /// Calls Pl@ntNet then Wikipedia and returns a bundled [PlantResult].
   Future<PlantResult> identify(File photo) async {
-    // Step 1 — compress
-    final compressed = await _compress(photo);
+    final identification = await _plantNet.identify(photo);
 
-    // Step 2 — species ID
-    final identification = await _plantNet.identify(compressed);
-
-    // Step 3 — care info (cache-first)
-    var careInfo = await _cache.get(identification.scientificName);
-    if (careInfo == null) {
-      careInfo = await _perenual.fetchByName(
-        identification.scientificName,
-        commonName: identification.commonName,
-      );
-      await _cache.put(identification.scientificName, careInfo);
+    // A very low confidence score means it's probably not a plant at all.
+    if (identification.confidence < 0.05) {
+      throw const NotAPlantException();
     }
 
-    return PlantResult(identification: identification, careInfo: careInfo);
-  }
+    final careInfo =
+        await _wikipedia.fetchByScientificName(identification.scientificName);
 
-  Future<File> _compress(File original) async {
-    final dir = await getTemporaryDirectory();
-    final targetPath =
-        '${dir.path}/plantodex_upload_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-    final result = await FlutterImageCompress.compressAndGetFile(
-      original.path,
-      targetPath,
-      minWidth: 1280,
-      minHeight: 1280,
-      quality: 80,
+    return PlantResult(
+      identification: identification,
+      careInfo: careInfo,
     );
-    return File(result?.path ?? original.path);
   }
 
-  void dispose() {}
+  void dispose() {
+    // Nothing to close currently, kept for API compatibility with
+    // DetectionProvider which calls _repository.dispose().
+  }
+
+  // ── Save a catch ───────────────────────────────────────────────────────────
+
+  /// Copies [photo] into the app's documents directory, then saves all
+  /// plant data to the database. Returns the new row's id.
+  Future<int> saveCatch({
+    required File photo,
+    required PlantIdentification identification,
+    required PlantCareInfo careInfo,
+  }) async {
+    final savedPhotoPath =
+        await _savePhoto(photo, identification.scientificName);
+
+    final rarity = identification.confidencePercent >= 85
+        ? Rarity.rare.name
+        : Rarity.common.name;
+
+    final plant = CaughtPlant(
+      commonName: identification.commonName,
+      scientificName: identification.scientificName,
+      confidence: identification.confidence,
+      rarity: rarity,
+      description: careInfo.description,
+      family: careInfo.family,
+      genus: careInfo.genus,
+      toxicity: careInfo.toxicity,
+      edible: careInfo.edible,
+      thumbnailUrl: careInfo.thumbnailUrl,
+      habitat: careInfo.habitat,
+      careTips: careInfo.careTips,
+      propagation: careInfo.propagation,
+      floweringSeason: careInfo.floweringSeason,
+      conservationStatus: careInfo.conservationStatus,
+      funFacts: careInfo.funFacts,
+      durationRaw: careInfo.duration.join(','),
+      lightLevel: careInfo.lightLevel,
+      atmosphericHumidity: careInfo.atmosphericHumidity,
+      photoPath: savedPhotoPath,
+      caughtAt: DateTime.now().millisecondsSinceEpoch,
+    );
+
+    final db = await _database;
+    return db.caughtPlantDao.insertPlant(plant);
+  }
+
+  // ── Read ───────────────────────────────────────────────────────────────────
+
+  Future<List<CaughtPlant>> getAllCatches() async {
+    final db = await _database;
+    return db.caughtPlantDao.getAllPlants();
+  }
+
+  Future<CaughtPlant?> getCatchById(int id) async {
+    final db = await _database;
+    return db.caughtPlantDao.getPlantById(id);
+  }
+
+  Future<bool> alreadyCaught(String scientificName) async {
+    final db = await _database;
+    final count = await db.caughtPlantDao.countByScientificName(scientificName);
+    return (count ?? 0) > 0;
+  }
+
+  Future<int> totalCaught() async {
+    final db = await _database;
+    return (await db.caughtPlantDao.getTotalCount()) ?? 0;
+  }
+
+  Stream<List<CaughtPlant>> watchAllCatches() async* {
+    final db = await _database;
+    yield* db.caughtPlantDao.watchAllPlants();
+  }
+
+  Stream<int> watchTotalCount() async* {
+    final db = await _database;
+    yield* db.caughtPlantDao.watchTotalCount().map((n) => n ?? 0);
+  }
+
+  // ── Delete ─────────────────────────────────────────────────────────────────
+
+  Future<void> deleteCatch(CaughtPlant plant) async {
+    final photoFile = File(plant.photoPath);
+    if (await photoFile.exists()) await photoFile.delete();
+
+    final db = await _database;
+    await db.caughtPlantDao.deletePlant(plant);
+  }
+
+  // ── Photo helper ───────────────────────────────────────────────────────────
+
+  Future<String> _savePhoto(File photo, String scientificName) async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final catchDir = Directory(p.join(docsDir.path, 'caught_plants'));
+    if (!await catchDir.exists()) await catchDir.create(recursive: true);
+
+    final safeName =
+        scientificName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_');
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final ext =
+        p.extension(photo.path).isNotEmpty ? p.extension(photo.path) : '.jpg';
+    final filename = '${safeName}_$timestamp$ext';
+
+    final dest = File(p.join(catchDir.path, filename));
+    await photo.copy(dest.path);
+
+    debugPrint('[PlantRepository] photo saved → ${dest.path}');
+    return dest.path;
+  }
 }

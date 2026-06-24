@@ -7,6 +7,7 @@ import '../screens/catch_success_screen.dart';
 import '../screens/dex_screen.dart';
 import '../screens/map_screen.dart';
 import '../screens/profile_screen.dart';
+import '../repositories/plant_repository.dart';
 import '../widgets/bottom_nav_shell.dart';
 
 final _shellKey = GlobalKey<NavigatorState>();
@@ -29,7 +30,9 @@ final router = GoRouter(
     GoRoute(
       parentNavigatorKey: _rootKey,
       path: '/catch',
-      builder: (context, state) => const CatchSuccessScreen(),
+      builder: (context, state) => CatchSuccessScreen(
+        result: state.extra as PlantResult?,
+      ),
     ),
 
     // Bottom-nav shell

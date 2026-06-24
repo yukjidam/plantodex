@@ -3,12 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
+import '../theme/rarity.dart';
+import '../repositories/plant_repository.dart';
 
 // Note: kept the class/file name as-is so router references (e.g. '/catch')
 // don't break. Rename CatchSuccessScreen -> PickSuccessScreen (and update
 // your router) if you'd like the rename to go all the way through.
 class CatchSuccessScreen extends StatefulWidget {
-  const CatchSuccessScreen({super.key});
+  const CatchSuccessScreen({super.key, this.result});
+
+  /// The identified plant passed via `context.push('/catch', extra: result)`.
+  /// Nullable so the route still renders gracefully if extra is missing.
+  final PlantResult? result;
 
   @override
   State<CatchSuccessScreen> createState() => _CatchSuccessScreenState();
@@ -102,8 +108,31 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
     super.dispose();
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  static Rarity _rarityFromConfidence(int pct) {
+    if (pct >= 95) return Rarity.legendary;
+    if (pct >= 80) return Rarity.epic;
+    if (pct >= 60) return Rarity.rare;
+    return Rarity.common;
+  }
+
+  static int _xpForRarity(Rarity r) => switch (r) {
+        Rarity.common => 40,
+        Rarity.rare => 120,
+        Rarity.epic => 200,
+        Rarity.legendary => 350,
+      };
+
   @override
   Widget build(BuildContext context) {
+    // ── Derive display values from result (with safe fallbacks) ────────────
+    final id = widget.result?.identification;
+    final commonName = id?.commonName ?? 'Unknown Plant';
+    final scientificName = id?.scientificName ?? '';
+    final rarity = _rarityFromConfidence(id?.confidencePercent ?? 0);
+    final xp = _xpForRarity(rarity);
+
     return Scaffold(
       backgroundColor: green900,
       body: Stack(
@@ -180,7 +209,8 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'Blue Vanda Orchid',
+                    commonName,
+                    textAlign: TextAlign.center,
                     style: GoogleFonts.spaceGrotesk(
                       fontSize: 26,
                       fontWeight: FontWeight.w600,
@@ -188,17 +218,30 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                     ),
                   ),
                   const SizedBox(height: 4),
+                  if (scientificName.isNotEmpty)
+                    Text(
+                      scientificName,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.35),
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  const SizedBox(height: 16),
+
+                  // Rarity label
                   Text(
-                    'Vanda coerulea',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 13,
-                      color: Colors.white.withOpacity(0.35),
-                      fontStyle: FontStyle.italic,
+                    rarity.label.toUpperCase(),
+                    style: GoogleFonts.spaceMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: rarity.color,
+                      letterSpacing: 2,
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
 
-                  // Rarity dots
+                  // Rarity dots — filled count driven by rarity.dots
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: List.generate(
@@ -211,8 +254,8 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                                 height: 9,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: i < 3
-                                      ? green300
+                                  color: i < rarity.dots
+                                      ? rarity.color
                                       : Colors.white.withOpacity(0.15),
                                 ),
                               ),
@@ -225,16 +268,16 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
                     decoration: BoxDecoration(
-                      color: green600.withOpacity(0.15),
+                      color: rarity.color.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: green600.withOpacity(0.3)),
+                      border: Border.all(color: rarity.color.withOpacity(0.35)),
                     ),
                     child: Text(
-                      '+120 XP earned',
+                      '+$xp XP earned',
                       style: GoogleFonts.spaceMono(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: green300,
+                        color: rarity.color,
                       ),
                     ),
                   ),

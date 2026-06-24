@@ -67,4 +67,11 @@ class PlantCacheDb {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
+
+  /// Deletes all cached entries. Use during development to force a
+  /// fresh Perenual fetch. Remove the call site once confirmed working.
+  Future<void> clearAll() async {
+    final db = await _database;
+    await db.delete('cached_species');
+  }
 }
