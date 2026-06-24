@@ -60,12 +60,12 @@ Four-tab bottom navigation shell:
 - [x] Handle camera permissions and lifecycle binding
 - [x] Add client-side image resize/compression after capture
 
-### Phase 3 — API Integration 🚧 *(in progress)*
+### Phase 3 — API Integration 
 - [x] Define Retrofit interfaces for the 3 endpoints (confirm → identify → info)
 - [x] Build the loading → result UI flow after capture
-- [ ] Add the offline check + "no signal" blocking state before allowing a scan
+- [x] Add the offline check + "no signal" blocking state before allowing a scan
 
-### Phase 4 — Catch Result + Storage
+### Phase 4 — Catch Result + Storage 🚧 *(in progress)*
 - [ ] Build the "catch" result screen (name, scientific name, rarity badge) from the API response
 - [ ] Set up Room database and schema for caught plants
 - [ ] Save successful catches to Room
