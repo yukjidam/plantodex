@@ -8,7 +8,7 @@ Point your camera at a plant, identify it, and catch it into your growing person
 ![Status](https://img.shields.io/badge/status-active%20development-brightgreen)
 ![Phase](https://img.shields.io/badge/phase-5%20Dex%20Screen-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
-![Language](https://img.shields.io/badge/language-Kotlin-7F52FF?logo=kotlin&logoColor=white)
+![Language](https://img.shields.io/badge/language-Dart-7F52FF?logo=dart&logoColor=white)
 
 </div>
 
