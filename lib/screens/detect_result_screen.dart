@@ -8,7 +8,7 @@ import '../theme/rarity.dart';
 import '../widgets/rarity_pill.dart';
 import '../providers/detection_provider.dart';
 import '../repositories/plant_repository.dart';
-import '../models/plant_rarity_lookup.dart';
+import '../services/gbif_service.dart';
 
 class DetectResultScreen extends StatefulWidget {
   const DetectResultScreen({super.key, required this.photo});
@@ -197,16 +197,29 @@ class _MessageScaffold extends StatelessWidget {
 
 // ── Success state ─────────────────────────────────────────────────────────────
 
-class _ResultScaffold extends StatelessWidget {
+class _ResultScaffold extends StatefulWidget {
   const _ResultScaffold({required this.photo, required this.result});
   final File photo;
   final PlantResult result;
 
   @override
+  State<_ResultScaffold> createState() => _ResultScaffoldState();
+}
+
+class _ResultScaffoldState extends State<_ResultScaffold> {
+  late final Future<Rarity> _rarityFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _rarityFuture =
+        GbifService().rarityFor(widget.result.identification.scientificName);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final id = result.identification;
-    final care = result.careInfo;
-    final rarity = rarityFor(id.scientificName);
+    final id = widget.result.identification;
+    final care = widget.result.careInfo;
 
     final tags = <String>[
       if (care.family != 'Unknown') care.family,
@@ -215,6 +228,43 @@ class _ResultScaffold extends StatelessWidget {
       if (care.toxicity == 'medium' || care.toxicity == 'high')
         'Toxic (${care.toxicity})',
     ];
+
+    return FutureBuilder<Rarity>(
+      future: _rarityFuture,
+      builder: (context, snapshot) {
+        // Keep showing loading until rarity is ready — pill appears correct
+        // on first render, no flicker.
+        if (!snapshot.hasData) {
+          return const _LoadingScaffold(status: DetectionStatus.fetchingInfo);
+        }
+        return _ResultScaffoldBody(
+          photo: widget.photo,
+          result: widget.result,
+          rarity: snapshot.data!,
+          tags: tags,
+        );
+      },
+    );
+  }
+}
+
+class _ResultScaffoldBody extends StatelessWidget {
+  const _ResultScaffoldBody({
+    required this.photo,
+    required this.result,
+    required this.rarity,
+    required this.tags,
+  });
+
+  final File photo;
+  final PlantResult result;
+  final Rarity rarity;
+  final List<String> tags;
+
+  @override
+  Widget build(BuildContext context) {
+    final id = result.identification;
+    final care = result.careInfo;
 
     return Scaffold(
       backgroundColor: surface,

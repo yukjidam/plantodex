@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../database/app_database.dart';
 import '../models/dex_card_data.dart';
 import '../models/dex_repository.dart';
+import '../repositories/plant_repository.dart';
 import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../widgets/rarity_pill.dart';
@@ -19,6 +20,7 @@ class DexScreen extends StatefulWidget {
 
 class _DexScreenState extends State<DexScreen> {
   Stream<DexSections>? _sectionsStream;
+  PlantRepository? _repository;
 
   @override
   void initState() {
@@ -28,11 +30,67 @@ class _DexScreenState extends State<DexScreen> {
 
   Future<void> _init() async {
     final db = await AppDatabase.getInstance();
-    if (!mounted) return; // screen was popped before the DB finished opening
-    final repository = DexRepository(db.caughtPlantDao);
+    if (!mounted) return;
+    final repository = PlantRepository();
+    final dexRepository = DexRepository(db.caughtPlantDao);
     setState(() {
-      _sectionsStream = repository.watchSections();
+      _repository = repository;
+      _sectionsStream = dexRepository.watchSections();
     });
+  }
+
+  Future<void> _deleteCatch(BuildContext context, DexCardData card) async {
+    if (card.caught == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Remove from Dex?',
+          style: GoogleFonts.spaceGrotesk(
+            fontWeight: FontWeight.w600,
+            color: textPrimary,
+          ),
+        ),
+        content: Text(
+          '${card.commonName} will be removed from your collection. This cannot be undone.',
+          style: GoogleFonts.spaceGrotesk(fontSize: 14, color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: GoogleFonts.spaceGrotesk(color: textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Remove',
+                style: GoogleFonts.spaceGrotesk(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                )),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && _repository != null) {
+      await _repository!.deleteCatch(card.caught!);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${card.commonName} removed.',
+              style: GoogleFonts.spaceGrotesk(color: textPrimary),
+            ),
+            backgroundColor: surface2,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -45,7 +103,10 @@ class _DexScreenState extends State<DexScreen> {
               stream: _sectionsStream,
               builder: (context, snapshot) {
                 final sections = snapshot.data ?? DexSections.empty;
-                return _DexScreenBody(sections: sections);
+                return _DexScreenBody(
+                  sections: sections,
+                  onDelete: (card) => _deleteCatch(context, card),
+                );
               },
             ),
     );
@@ -53,18 +114,19 @@ class _DexScreenState extends State<DexScreen> {
 }
 
 class _DexScreenBody extends StatelessWidget {
-  const _DexScreenBody({required this.sections});
+  const _DexScreenBody({required this.sections, required this.onDelete});
 
   final DexSections sections;
+  final Future<void> Function(DexCardData) onDelete;
 
   @override
   Widget build(BuildContext context) {
     final stats = sections.stats;
-    final isEmpty = stats.caughtCount == 0;
+    final isEmpty = sections.all.isEmpty;
 
     return CustomScrollView(
       slivers: [
-        // ── Top bar ────────────────────────────────────────────────────────
+        // ── Top bar ──────────────────────────────────────────────────────
         SliverToBoxAdapter(
           child: Container(
             decoration: const BoxDecoration(
@@ -115,8 +177,6 @@ class _DexScreenBody extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 12),
-
-                    // Stat pills
                     Row(
                       children: [
                         _StatPill('${stats.caughtCount}', 'Caught'),
@@ -127,8 +187,6 @@ class _DexScreenBody extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
-
-                    // Search bar
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 9),
@@ -152,7 +210,7 @@ class _DexScreenBody extends StatelessWidget {
           ),
         ),
 
-        // ── Grid sections ──────────────────────────────────────────────────
+        // ── Album grid ────────────────────────────────────────────────────
         if (isEmpty)
           const SliverFillRemaining(
             hasScrollBody: false,
@@ -160,24 +218,14 @@ class _DexScreenBody extends StatelessWidget {
           )
         else
           _DexSection(
-            title: 'Recent catches',
-            cards: sections.recent,
-            onTap: (c) => context.push('/detect'),
-          ),
-        if (sections.legendary.isNotEmpty)
-          _DexSection(
-            title: 'Legendary',
-            cards: sections.legendary,
-            onTap: (c) => !c.isLocked ? context.push('/detect') : null,
-          ),
-        if (sections.rare.isNotEmpty)
-          _DexSection(
-            title: 'Rare',
-            cards: sections.rare,
-            onTap: (c) => !c.isLocked ? context.push('/detect') : null,
+            title: 'My Collection',
+            cards: sections.all,
+            onTap: (c) {
+              context.push('/detect');
+            },
+            onDelete: onDelete,
           ),
 
-        // Bottom padding for nav bar
         const SliverToBoxAdapter(child: SizedBox(height: 80)),
       ],
     );
@@ -217,11 +265,17 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _DexSection extends StatelessWidget {
-  const _DexSection(
-      {required this.title, required this.cards, required this.onTap});
+  const _DexSection({
+    required this.title,
+    required this.cards,
+    required this.onTap,
+    required this.onDelete,
+  });
+
   final String title;
   final List<DexCardData> cards;
   final void Function(DexCardData) onTap;
+  final Future<void> Function(DexCardData) onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -247,7 +301,11 @@ class _DexSection extends StatelessWidget {
             crossAxisSpacing: 10,
             childAspectRatio: 0.88,
             children: cards
-                .map((c) => _DexCard(card: c, onTap: () => onTap(c)))
+                .map((c) => _DexCard(
+                      card: c,
+                      onTap: () => onTap(c),
+                      onDelete: () => onDelete(c),
+                    ))
                 .toList(),
           ),
           const SizedBox(height: 8),
@@ -258,16 +316,23 @@ class _DexSection extends StatelessWidget {
 }
 
 class _DexCard extends StatelessWidget {
-  const _DexCard({required this.card, required this.onTap});
+  const _DexCard({
+    required this.card,
+    required this.onTap,
+    required this.onDelete,
+  });
+
   final DexCardData card;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
     final rarity = card.rarity;
 
     return GestureDetector(
-      onTap: card.isLocked ? null : onTap,
+      onTap: onTap,
+      onLongPress: onDelete,
       child: Container(
         decoration: BoxDecoration(
           color: surface,
@@ -284,23 +349,38 @@ class _DexCard extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: card.isLocked
-                        ? _LockedFallback(rarity: rarity)
-                        : (card.photoPath?.isNotEmpty ?? false)
-                            ? Image.file(
-                                File(card.photoPath!),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) =>
-                                    _CardFallback(rarity: rarity),
-                              )
-                            : _CardFallback(rarity: rarity),
+                    child: (card.photoPath?.isNotEmpty ?? false)
+                        ? Image.file(
+                            File(card.photoPath!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                _CardFallback(rarity: rarity),
+                          )
+                        : _CardFallback(rarity: rarity),
                   ),
-                  if (!card.isLocked)
-                    Positioned(
-                      top: 7,
-                      right: 7,
-                      child: RarityBadge(rarity),
+                  // Rarity pill — top right
+                  Positioned(
+                    top: 7,
+                    right: 7,
+                    child: RarityBadge(rarity),
+                  ),
+                  // Delete button — top left
+                  Positioned(
+                    top: 7,
+                    left: 7,
+                    child: GestureDetector(
+                      onTap: onDelete,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Icon(Icons.delete_outline,
+                            size: 14, color: Colors.white),
+                      ),
                     ),
+                  ),
                 ],
               ),
             ),
@@ -310,32 +390,27 @@ class _DexCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(card.commonName,
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: card.isLocked ? textMuted : textPrimary,
-                              height: 1.2,
-                            )),
-                      ),
-                      if (card.isLocked)
-                        const Icon(Icons.lock_outline,
-                            size: 13, color: textMuted),
-                    ],
+                  Text(
+                    card.commonName,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimary,
+                      height: 1.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    card.isLocked
-                        ? 'Not yet found'
-                        : (card.scientificName ?? ''),
+                    card.scientificName ?? '',
                     style: GoogleFonts.spaceGrotesk(
                       fontSize: 11,
                       color: textMuted,
                       fontStyle: FontStyle.italic,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -347,24 +422,6 @@ class _DexCard extends StatelessWidget {
   }
 }
 
-/// Shown for a locked target card — a hint that something is out there
-/// without revealing what it looks like.
-class _LockedFallback extends StatelessWidget {
-  const _LockedFallback({required this.rarity});
-  final Rarity rarity;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: surface2,
-      child: const Center(
-        child: Icon(Icons.lock_outline, size: 30, color: textMuted),
-      ),
-    );
-  }
-}
-
-/// Shown when a caught plant has no usable photo (missing/broken path).
 class _CardFallback extends StatelessWidget {
   const _CardFallback({required this.rarity});
   final Rarity rarity;

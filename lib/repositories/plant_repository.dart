@@ -7,7 +7,7 @@ import '../database/app_database.dart';
 import '../models/caught_plant.dart';
 import '../models/plant_identification.dart';
 import '../models/plant_care_info.dart';
-import '../models/plant_rarity_lookup.dart';
+import '../services/gbif_service.dart';
 import '../services/plantnet_service.dart';
 import '../services/wikipedia_service.dart';
 
@@ -48,13 +48,16 @@ class PlantRepository {
   PlantRepository({
     PlantNetService? plantNetService,
     WikipediaService? wikipediaService,
+    GbifService? gbifService,
   })  : _plantNet = plantNetService ?? PlantNetService(),
-        _wikipedia = wikipediaService ?? WikipediaService();
+        _wikipedia = wikipediaService ?? WikipediaService(),
+        _gbif = gbifService ?? GbifService();
 
   static final PlantRepository instance = PlantRepository();
 
   final PlantNetService _plantNet;
   final WikipediaService _wikipedia;
+  final GbifService _gbif;
 
   AppDatabase? _db;
 
@@ -104,7 +107,8 @@ class PlantRepository {
     final savedPhotoPath =
         await _savePhoto(photo, identification.scientificName);
 
-    final rarity = rarityFor(identification.scientificName).name;
+    // Derive rarity from GBIF occurrence count — falls back to common on error.
+    final rarity = (await _gbif.rarityFor(identification.scientificName)).name;
 
     final plant = CaughtPlant(
       commonName: identification.commonName,
