@@ -2,19 +2,19 @@
 
 **PlantoDex** is a Pokémon GO-inspired Android app for plants. Scan a plant with your camera, let the API identify it, and "catch" it into your personal Dex, complete with rarity badges, species info, and a growing collection to discover.
 
-> ✅ **Status:** Core features through **Phase 5** are complete. Currently focused on optimization, refinement, and preparing for future features.
+> 🚧 **Status:** In active development, currently in **Phase 5 (Dex Screen)**, optimizing the Dex Screen and local database.
 
 ---
 
 ## Concept
 
-| Pokémon GO         | PlantoDex                                     |
-| ------------------ | --------------------------------------------- |
-| Catch wild Pokémon | Scan real plants                              |
-| Pokédex            | PlantoDex                                     |
-| Rarity tiers       | Rarity badges (common → legendary)            |
-| Gym / Map          | Map of where you scanned each plant (planned) |
-| Trainer profile    | Profile screen (planned)                      |
+| Pokémon GO | PlantoDex |
+|---|---|
+| Catch wild Pokémon | Scan real plants |
+| Pokédex | PlantoDex |
+| Rarity tiers | Rarity badges (common → legendary) |
+| Gym / Map | Map of where you scanned each plant (planned) |
+| Trainer profile | Profile screen (planned) |
 
 Point your camera at a plant, snap a photo, and the app identifies the species and pulls up care info, turning plant ID into a collectible, game-like experience.
 
@@ -22,28 +22,18 @@ Point your camera at a plant, snap a photo, and the app identifies the species a
 
 ## Tech Stack
 
-* **UI:** Jetpack Compose
-* **Camera:** CameraX
-* **Networking:** Retrofit
-* **Local Storage:** Room
-* **Architecture:** Standard Android app (Compose navigation, lifecycle-aware camera binding)
-
----
+- **UI:** Jetpack Compose
+- **Camera:** CameraX
+- **Networking:** Retrofit
+- **Local storage:** Room
+- **Architecture:** Standard Android app (Compose navigation, lifecycle-aware camera binding)
 
 ## APIs
 
-| API          | Purpose                                             | Status     |
-| ------------ | --------------------------------------------------- | ---------- |
-| PlantNet     | Plant identification from photo                     | ✅ Current  |
-| ~~Perenual~~ | Plant species information                           | ❌ Replaced |
-| ~~Trefle~~   | Plant species information                           | ❌ Replaced |
-| Wikipedia    | Plant information, descriptions, and reference data | ✅ Current  |
-
-### API Evolution
-
-1. PlantNet + ~~Perenual~~
-2. PlantNet + ~~Trefle~~
-3. PlantNet + Wikipedia *(current implementation)*
+| API | Purpose |
+|---|---|
+| [PlantNet](https://my.plantnet.org/) | Plant identification from photo |
+| [Perenual](https://perenual.com/) | Plant species info (care, details) for the identified result |
 
 ---
 
@@ -51,79 +41,49 @@ Point your camera at a plant, snap a photo, and the app identifies the species a
 
 Four-tab bottom navigation shell:
 
-* **Scan**: Camera capture + identification flow
-* **Dex**: Grid of caught/discovered plants
-* **Map**: *(planned)* Shows where each plant was scanned/caught, pinned on a map
-* **Profile**: *(planned)* Levels, achievements, streaks
+- **Scan**: camera capture + identification flow
+- **Dex**: grid of caught/discovered plants
+- **Map**: *(planned)* shows where each plant was scanned/caught, pinned on a map
+- **Profile**: *(planned)* levels, achievements, streaks
 
 ---
 
 ## Roadmap
 
 ### Phase 1 — Skeleton
-
-* [x] Create Compose project in Android Studio and add required dependencies
-* [x] Build the 4-screen navigation shell (Scan / Dex / Map / Profile)
-* [x] Create placeholder screens and navigation flow
+- [x] Create Compose project in Android Studio, add all dependencies above
+- [x] Build the 4-screen navigation shell (Scan / Dex / Map / Profile) with bottom nav, matching the mockup's tabs
+- [x] Stub each screen with placeholder content so navigation is fully wired before any real feature work
 
 ### Phase 2 — Camera
+- [x] Implement CameraX preview + capture on the Scan screen
+- [x] Handle camera permissions and lifecycle binding
+- [x] Add client-side image resize/compression after capture
 
-* [x] Implement CameraX preview and image capture
-* [x] Handle camera permissions and lifecycle binding
-* [x] Add client-side image resize/compression
+### Phase 3 — API Integration 
+- [x] Define Retrofit interfaces for the 3 endpoints (confirm → identify → info)
+- [x] Build the loading → result UI flow after capture
+- [x] Add the offline check + "no signal" blocking state before allowing a scan
 
-### Phase 3 — API Integration
+### Phase 4 — Catch Result + Storage 
+- [x] Build the "catch" result screen (name, scientific name, rarity badge) from the API response
+- [x] Set up Room database and schema for caught plants
+- [x] Save successful catches to Room
 
-* [x] Integrate PlantNet for plant identification
-* [x] Integrate plant information APIs
-* [x] Build loading → result flow after capture
-* [x] Add offline detection and no-signal handling
+### Phase 5 — Dex Screen 🚧 *(in progress, currently optimizing)*
+- [x] Build the Dex grid UI, backed by a Room Flow query
+- [x] Add sections (Recent / Legendary / Undiscovered) and locked-card states
+- [x] Add search over saved plants
 
-### Phase 4 — Catch Result + Storage
+### Phase 6 — Polish
+- [ ] Port the rarity color theming from the HTML mockup's CSS variables into Compose
+- [ ] Add catch/scan animations
+- [ ] Refine empty/locked states
 
-* [x] Build catch result screen
-* [x] Set up Room database schema
-* [x] Save successful catches locally
-
-### Phase 5 — Dex Screen
-
-* [x] Build Dex grid UI backed by Room
-* [x] Add plant collection browsing
-* [x] Add search functionality
-* [x] Implement discovered/caught plant tracking
-
-### Phase 6 — Polish *(Current Focus)*
-
-* [ ] Performance optimization
-* [ ] UI refinement and visual polish
-* [ ] Catch/scan animations
-* [ ] Rarity-based color theming improvements
-* [ ] Improved empty and locked states
-* [ ] Code cleanup and architecture refinement
-
----
-
-## Future Features
-
-### Map Screen
-
-* View scan locations on an interactive map
-* Track where plants were discovered
-
-### Profile Screen
-
-* Trainer-style profile
-* Levels and progression
-* Achievements and milestones
-* Scan streaks
-
-### Possible Future Enhancements
-
-* Background sync queue for offline catches
-* Seasonal plant events
-* Collection statistics
-* Achievement system
-* Community features
+### Later / Not Day-One
+- Map screen (real implementation)
+- Profile screen (levels, achievements, streaks)
+- Background sync queue for offline catches, if it turns out to be needed
 
 ---
 
@@ -131,15 +91,15 @@ Four-tab bottom navigation shell:
 
 Plant ID apps tend to be purely utilitarian: point, identify, done. PlantoDex exists to make that moment feel like *discovery* instead of a lookup:
 
-* **Make learning about plants feel like progress**, not a chore. Every scan adds to a personal collection instead of disappearing into a search history.
-* **Borrow what makes collecting games satisfying**: rarity tiers, a Dex to fill out, a sense of "what haven't I found yet," and apply that to something genuinely useful (knowing what's growing around you).
-* **Encourage going outside and looking closer.** A walk becomes a chance to find something new to catch, not just exercise.
-* **Keep the core loop simple.** Scan → identify → catch → collect. Everything else (map, profile, streaks) exists to support that loop.
+- **Make learning about plants feel like progress**, not a chore. Every scan adds to a personal collection instead of disappearing into a search history.
+- **Borrow what makes collecting games satisfying**: rarity tiers, a Dex to fill out, a sense of "what haven't I found yet," and apply that to something genuinely useful (knowing what's growing around you).
+- **Encourage going outside and looking closer.** A walk becomes a chance to find something new to catch, not just exercise.
+- **Keep the core loop simple.** Scan → identify → catch → collect. Everything else (map, profile, streaks) is in service of that loop, not a distraction from it.
 
-This is a personal project exploring the intersection of plant identification and game-inspired collection mechanics.
+This is a personal project to explore that idea — part plant-ID tool, part lightweight collecting game.
 
 ---
 
 ## Notes
 
-This project is under active development. Core functionality through Phase 5 has been completed, and current work is focused on optimization, polishing the user experience, and preparing future features.
+This project is under active, iterative development. The roadmap above is the source of truth for current progress; check boxes are updated as phases complete.
