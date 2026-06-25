@@ -31,7 +31,7 @@ final router = GoRouter(
       parentNavigatorKey: _rootKey,
       path: '/catch',
       builder: (context, state) => CatchSuccessScreen(
-        result: state.extra as PlantResult?,
+        args: state.extra,
       ),
     ),
 

@@ -5,16 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../repositories/plant_repository.dart';
+import 'catch_success_args.dart';
 
-// Note: kept the class/file name as-is so router references (e.g. '/catch')
-// don't break. Rename CatchSuccessScreen -> PickSuccessScreen (and update
-// your router) if you'd like the rename to go all the way through.
 class CatchSuccessScreen extends StatefulWidget {
-  const CatchSuccessScreen({super.key, this.result});
+  const CatchSuccessScreen({super.key, this.args});
 
-  /// The identified plant passed via `context.push('/catch', extra: result)`.
-  /// Nullable so the route still renders gracefully if extra is missing.
-  final PlantResult? result;
+  /// Pass a [CatchSuccessArgs] via `context.push('/catch', extra: args)`.
+  /// Accepts the old [PlantResult]-only extra for backwards compatibility.
+  final Object? args;
 
   @override
   State<CatchSuccessScreen> createState() => _CatchSuccessScreenState();
@@ -37,8 +35,17 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
   late final AnimationController _floatCtrl;
   late final Animation<double> _floatY;
 
-  // Sparkle particles
+  // Sparkle / ambient particles
   late final AnimationController _particleCtrl;
+
+  // Legendary-only: golden rays rotating behind the pot
+  late final AnimationController _rayCtrl;
+
+  // Epic-only: shimmer pulse
+  late final AnimationController _shimmerCtrl;
+
+  // Rare-only: ripple rings expanding outward
+  late final AnimationController _rippleCtrl;
 
   @override
   void initState() {
@@ -92,6 +99,24 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
       duration: const Duration(milliseconds: 1200),
     );
 
+    // 5. Legendary rays — slow rotation loop
+    _rayCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 6000),
+    )..repeat();
+
+    // 6. Epic shimmer pulse loop
+    _shimmerCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+
+    // 7. Rare ripple — repeating outward rings
+    _rippleCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+
     // Chain: pot settles → sprout grows + sparkles
     _potCtrl.forward().then((_) {
       _sproutCtrl.forward();
@@ -105,17 +130,33 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
     _sproutCtrl.dispose();
     _floatCtrl.dispose();
     _particleCtrl.dispose();
+    _rayCtrl.dispose();
+    _shimmerCtrl.dispose();
+    _rippleCtrl.dispose();
     super.dispose();
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Unpack args ────────────────────────────────────────────────────────────
 
-  static Rarity _rarityFromConfidence(int pct) {
+  PlantResult? get _result {
+    if (widget.args is CatchSuccessArgs)
+      return (widget.args as CatchSuccessArgs).result;
+    if (widget.args is PlantResult) return widget.args as PlantResult;
+    return null;
+  }
+
+  Rarity get _rarity {
+    if (widget.args is CatchSuccessArgs)
+      return (widget.args as CatchSuccessArgs).rarity;
+    // Fallback: derive from confidence (kept for backwards compat)
+    final pct = _result?.identification.confidencePercent ?? 0;
     if (pct >= 95) return Rarity.legendary;
     if (pct >= 80) return Rarity.epic;
     if (pct >= 60) return Rarity.rare;
     return Rarity.common;
   }
+
+  // ── Rarity-driven theme ────────────────────────────────────────────────────
 
   static int _xpForRarity(Rarity r) => switch (r) {
         Rarity.common => 40,
@@ -124,45 +165,150 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
         Rarity.legendary => 350,
       };
 
+  /// Background gradient colors per rarity.
+  static List<Color> _bgGradient(Rarity r) => switch (r) {
+        Rarity.common => [const Color(0xFF0D1F0D), const Color(0xFF0A1A10)],
+        Rarity.rare => [const Color(0xFF0A1428), const Color(0xFF081020)],
+        Rarity.epic => [const Color(0xFF18082E), const Color(0xFF100522)],
+        Rarity.legendary => [const Color(0xFF1C1100), const Color(0xFF110900)],
+      };
+
+  /// Radial glow overlay color per rarity.
+  static Color _glowColor(Rarity r) => switch (r) {
+        Rarity.common => green700,
+        Rarity.rare => blue,
+        Rarity.epic => purple,
+        Rarity.legendary => amber,
+      };
+
+  /// Headline copy per rarity — same voice as detect screen.
+  static String _headline(Rarity r) => switch (r) {
+        Rarity.common => 'You picked a',
+        Rarity.rare => 'Rare find! You picked a',
+        Rarity.epic => 'Incredible! You caught an',
+        Rarity.legendary => '✨ Legendary discovery!',
+      };
+
+  /// Sub-label shown below the plant name.
+  static String _subLabel(Rarity r) => switch (r) {
+        Rarity.common => 'Added to your Dex.',
+        Rarity.rare => 'Not many trainers have this one.',
+        Rarity.epic => 'Only the sharpest eyes find these.',
+        Rarity.legendary => 'One of the rarest plants on the planet.',
+      };
+
+  // ── Sprout color per rarity ────────────────────────────────────────────────
+
+  static Color _stemColor(Rarity r) => switch (r) {
+        Rarity.common => green400,
+        Rarity.rare => blue,
+        Rarity.epic => purple,
+        Rarity.legendary => amber,
+      };
+
+  static Color _leafColor(Rarity r) => switch (r) {
+        Rarity.common => green500,
+        Rarity.rare => const Color(0xFF4A90D9),
+        Rarity.epic => const Color(0xFF9B59E8),
+        Rarity.legendary => const Color(0xFFE8A020),
+      };
+
+  static Color _budColor(Rarity r) => switch (r) {
+        Rarity.common => green300,
+        Rarity.rare => const Color(0xFF7AB8F5),
+        Rarity.epic => const Color(0xFFBD8AF8),
+        Rarity.legendary => const Color(0xFFFFD060),
+      };
+
   @override
   Widget build(BuildContext context) {
-    // ── Derive display values from result (with safe fallbacks) ────────────
-    final id = widget.result?.identification;
+    final id = _result?.identification;
     final commonName = id?.commonName ?? 'Unknown Plant';
     final scientificName = id?.scientificName ?? '';
-    final rarity = _rarityFromConfidence(id?.confidencePercent ?? 0);
+    final rarity = _rarity;
     final xp = _xpForRarity(rarity);
+    final bgColors = _bgGradient(rarity);
+    final glowColor = _glowColor(rarity);
 
     return Scaffold(
-      backgroundColor: green900,
+      backgroundColor: Color(bgColors[0].value),
       body: Stack(
         children: [
-          // Soft radial glow
+          // ── Background gradient ──────────────────────────────────────────
           Container(
             decoration: BoxDecoration(
-              gradient: RadialGradient(
-                radius: 0.75,
-                colors: [green700.withOpacity(0.18), Colors.transparent],
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: bgColors,
               ),
             ),
           ),
 
-          // Sparkle particles
+          // ── Soft radial glow ────────────────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                radius: 0.75,
+                colors: [glowColor.withOpacity(0.18), Colors.transparent],
+              ),
+            ),
+          ),
+
+          // ── Legendary: rotating golden rays ─────────────────────────────
+          if (rarity == Rarity.legendary)
+            AnimatedBuilder(
+              animation: _rayCtrl,
+              builder: (_, __) => CustomPaint(
+                painter: _RayPainter(_rayCtrl.value, amber),
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+          // ── Epic: shimmer pulse rings ────────────────────────────────────
+          if (rarity == Rarity.epic)
+            AnimatedBuilder(
+              animation: _shimmerCtrl,
+              builder: (_, __) => CustomPaint(
+                painter: _ShimmerRingPainter(_shimmerCtrl.value, purple),
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+          // ── Rare: expanding ripple rings ────────────────────────────────
+          if (rarity == Rarity.rare)
+            AnimatedBuilder(
+              animation: _rippleCtrl,
+              builder: (_, __) => CustomPaint(
+                painter: _RipplePainter(_rippleCtrl.value, blue),
+                child: const SizedBox.expand(),
+              ),
+            ),
+
+          // ── Sparkle particles (color matches rarity) ────────────────────
           AnimatedBuilder(
             animation: _particleCtrl,
             builder: (context, _) => CustomPaint(
-              painter: _SparkleParticlePainter(_particleCtrl.value),
+              painter: _SparkleParticlePainter(
+                _particleCtrl.value,
+                rarity.color,
+                count: rarity == Rarity.legendary
+                    ? 18
+                    : rarity == Rarity.epic
+                        ? 14
+                        : 10,
+              ),
               child: const SizedBox.expand(),
             ),
           ),
 
-          // Main content
+          // ── Main content ─────────────────────────────────────────────────
           SafeArea(
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Pot with sprout grow animation
+                  // ── Pot with rarity-tinted sprout ──────────────────────
                   AnimatedBuilder(
                     animation:
                         Listenable.merge([_potCtrl, _sproutCtrl, _floatCtrl]),
@@ -185,10 +331,13 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                                     child: _Sprout(
                                       stemGrow: _stemGrow.value,
                                       leafGrow: _leafGrow.value,
+                                      stemColor: _stemColor(rarity),
+                                      leafColor: _leafColor(rarity),
+                                      budColor: _budColor(rarity),
                                     ),
                                   ),
                                 ),
-                                // Pot (drawn on top so soil line hides stem base)
+                                // Pot on top so soil line hides stem base
                                 _Pot(bounce: _potBounce.value),
                               ],
                             ),
@@ -200,14 +349,24 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
 
                   const SizedBox(height: 32),
 
+                  // ── Headline ───────────────────────────────────────────
                   Text(
-                    'You picked a',
+                    _headline(rarity),
                     style: GoogleFonts.spaceGrotesk(
-                      fontSize: 14,
-                      color: Colors.white.withOpacity(0.5),
+                      fontSize: rarity == Rarity.legendary ? 16 : 14,
+                      fontWeight: rarity == Rarity.legendary
+                          ? FontWeight.w600
+                          : FontWeight.w400,
+                      color: rarity == Rarity.legendary
+                          ? amber
+                          : Colors.white.withOpacity(0.5),
                     ),
                   ),
+
+                  // For legendary the headline is self-contained; plant name
+                  // still appears right below in larger text.
                   const SizedBox(height: 6),
+
                   Text(
                     commonName,
                     textAlign: TextAlign.center,
@@ -227,9 +386,10 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                         fontStyle: FontStyle.italic,
                       ),
                     ),
+
                   const SizedBox(height: 16),
 
-                  // Rarity label
+                  // ── Rarity label ────────────────────────────────────────
                   Text(
                     rarity.label.toUpperCase(),
                     style: GoogleFonts.spaceMono(
@@ -239,9 +399,20 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                       letterSpacing: 2,
                     ),
                   ),
+                  const SizedBox(height: 8),
+
+                  // ── Sub-label ────────────────────────────────────────────
+                  Text(
+                    _subLabel(rarity),
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.40),
+                    ),
+                  ),
+
                   const SizedBox(height: 10),
 
-                  // Rarity dots — filled count driven by rarity.dots
+                  // ── Rarity dots ─────────────────────────────────────────
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: List.generate(
@@ -263,7 +434,7 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                   ),
                   const SizedBox(height: 24),
 
-                  // XP badge
+                  // ── XP badge ────────────────────────────────────────────
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
@@ -283,16 +454,16 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                   ),
                   const SizedBox(height: 28),
 
-                  // View in Garden button
+                  // ── View in Garden button ────────────────────────────────
                   SizedBox(
                     width: 260,
                     height: 52,
                     child: OutlinedButton(
                       onPressed: () => context.go('/dex'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: green300,
+                        foregroundColor: rarity.color,
                         side: BorderSide(
-                            color: green600.withOpacity(0.4), width: 1.5),
+                            color: rarity.color.withOpacity(0.4), width: 1.5),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                       ),
@@ -301,7 +472,7 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: green300,
+                          color: rarity.color,
                         ),
                       ),
                     ),
@@ -324,7 +495,6 @@ class _Pot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // tiny squash-and-stretch as it "settles"
     final squash = 1.0 - (math.sin(bounce * math.pi) * 0.04);
     return Transform.scale(
       scaleX: 1 / squash,
@@ -351,18 +521,14 @@ class _PotPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
 
-    // Pot body — trapezoid, narrower at the bottom
     final bodyPath = Path()
       ..moveTo(w * 0.08, h * 0.28)
       ..lineTo(w * 0.92, h * 0.28)
       ..lineTo(w * 0.78, h)
       ..lineTo(w * 0.22, h)
       ..close();
+    canvas.drawPath(bodyPath, Paint()..color = terracotta);
 
-    final bodyPaint = Paint()..color = terracotta;
-    canvas.drawPath(bodyPath, bodyPaint);
-
-    // Shading on the right side of the pot
     final shadePath = Path()
       ..moveTo(w * 0.55, h * 0.28)
       ..lineTo(w * 0.92, h * 0.28)
@@ -372,14 +538,12 @@ class _PotPainter extends CustomPainter {
     canvas.drawPath(
         shadePath, Paint()..color = terracottaDark.withOpacity(0.55));
 
-    // Rim
     final rimRect = Rect.fromLTWH(0, h * 0.18, w, h * 0.16);
     canvas.drawRRect(
       RRect.fromRectAndRadius(rimRect, const Radius.circular(6)),
       Paint()..color = rimColor,
     );
 
-    // Soil (ellipse at top of pot, inside the rim)
     final soilRect = Rect.fromLTWH(w * 0.14, h * 0.20, w * 0.72, h * 0.16);
     canvas.drawOval(soilRect, Paint()..color = soilColor);
     canvas.drawOval(
@@ -387,7 +551,6 @@ class _PotPainter extends CustomPainter {
       Paint()..color = soilHighlight.withOpacity(0.6),
     );
 
-    // A couple of little soil crumbs for texture
     final crumbPaint = Paint()..color = soilHighlight;
     canvas.drawCircle(Offset(w * 0.32, h * 0.27), 1.6, crumbPaint);
     canvas.drawCircle(Offset(w * 0.6, h * 0.29), 1.4, crumbPaint);
@@ -398,12 +561,21 @@ class _PotPainter extends CustomPainter {
   bool shouldRepaint(_PotPainter old) => false;
 }
 
-// ── Sprout that grows up out of the soil ───────────────────────────────────
+// ── Sprout ─────────────────────────────────────────────────────────────────
 
 class _Sprout extends StatelessWidget {
-  const _Sprout({required this.stemGrow, required this.leafGrow});
-  final double stemGrow; // 0 -> 1, how tall the stem is
-  final double leafGrow; // 0 -> 1, how unfurled the leaves are
+  const _Sprout({
+    required this.stemGrow,
+    required this.leafGrow,
+    required this.stemColor,
+    required this.leafColor,
+    required this.budColor,
+  });
+  final double stemGrow;
+  final double leafGrow;
+  final Color stemColor;
+  final Color leafColor;
+  final Color budColor;
 
   @override
   Widget build(BuildContext context) {
@@ -411,42 +583,55 @@ class _Sprout extends StatelessWidget {
       width: 70,
       height: 90,
       child: CustomPaint(
-        painter: _SproutPainter(stemGrow: stemGrow, leafGrow: leafGrow),
+        painter: _SproutPainter(
+          stemGrow: stemGrow,
+          leafGrow: leafGrow,
+          stemColor: stemColor,
+          leafColor: leafColor,
+          budColor: budColor,
+        ),
       ),
     );
   }
 }
 
 class _SproutPainter extends CustomPainter {
-  _SproutPainter({required this.stemGrow, required this.leafGrow});
+  _SproutPainter({
+    required this.stemGrow,
+    required this.leafGrow,
+    required this.stemColor,
+    required this.leafColor,
+    required this.budColor,
+  });
+
   final double stemGrow;
   final double leafGrow;
+  final Color stemColor;
+  final Color leafColor;
+  final Color budColor;
 
   @override
   void paint(Canvas canvas, Size size) {
     final stemPaint = Paint()
-      ..color = green400
+      ..color = stemColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
 
-    final baseY = size.height; // stem starts at the soil line
+    final baseY = size.height;
     final topY = size.height - (size.height * 0.75 * stemGrow);
     final midX = size.width / 2;
 
-    // Stem grows upward
     canvas.drawLine(Offset(midX, baseY), Offset(midX, topY), stemPaint);
 
     if (leafGrow <= 0) return;
 
-    // Leaves unfurl from the top of the stem, scaled by leafGrow
     canvas.save();
     canvas.translate(midX, topY);
     canvas.scale(leafGrow);
 
-    // Left leaf
-    final leftLeaf = Paint()
-      ..color = green500
+    final darkLeaf = Paint()
+      ..color = leafColor.withOpacity(0.85)
       ..style = PaintingStyle.fill;
     final leftPath = Path()
       ..moveTo(0, 8)
@@ -454,11 +639,10 @@ class _SproutPainter extends CustomPainter {
           -size.width * 0.42, -2, -size.width * 0.36, -size.height * 0.22)
       ..quadraticBezierTo(-size.width * 0.12, -size.height * 0.04, 0, 8)
       ..close();
-    canvas.drawPath(leftPath, leftLeaf);
+    canvas.drawPath(leftPath, darkLeaf);
 
-    // Right leaf
-    final rightLeaf = Paint()
-      ..color = green400
+    final lightLeaf = Paint()
+      ..color = leafColor
       ..style = PaintingStyle.fill;
     final rightPath = Path()
       ..moveTo(0, 2)
@@ -466,13 +650,14 @@ class _SproutPainter extends CustomPainter {
           size.width * 0.4, -size.height * 0.3)
       ..quadraticBezierTo(size.width * 0.14, -size.height * 0.1, 0, 2)
       ..close();
-    canvas.drawPath(rightPath, rightLeaf);
+    canvas.drawPath(rightPath, lightLeaf);
 
-    // Top bud
-    final budPaint = Paint()
-      ..color = green300
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(const Offset(0, -8), 6.5, budPaint);
+    canvas.drawCircle(
+        const Offset(0, -8),
+        6.5,
+        Paint()
+          ..color = budColor
+          ..style = PaintingStyle.fill);
 
     canvas.restore();
   }
@@ -482,13 +667,18 @@ class _SproutPainter extends CustomPainter {
       old.stemGrow != stemGrow || old.leafGrow != leafGrow;
 }
 
-// ── Sparkle particles celebrating the new sprout ────────────────────────────
+// ── Sparkle particles (rarity-tinted) ──────────────────────────────────────
 
 class _SparkleParticlePainter extends CustomPainter {
-  _SparkleParticlePainter(this.progress);
-  final double progress;
+  _SparkleParticlePainter(this.progress, this.color, {this.count = 10});
 
-  static final _particles = List.generate(10, (i) {
+  final double progress;
+  final Color color;
+  final int count;
+
+  late final List<
+          ({double angle, double speed, double size, double startDelay})>
+      _particles = List.generate(count, (i) {
     final rng = math.Random(i * 42);
     return (
       angle: rng.nextDouble() * math.pi * 2,
@@ -514,10 +704,9 @@ class _SparkleParticlePainter extends CustomPainter {
       final opacity = (1 - t).clamp(0.0, 1.0);
 
       final paint = Paint()
-        ..color = green300.withOpacity(opacity * 0.8)
+        ..color = color.withOpacity(opacity * 0.85)
         ..style = PaintingStyle.fill;
 
-      // Draw a tiny 4-point sparkle/star
       canvas.save();
       canvas.translate(x, y);
       canvas.rotate(t * math.pi);
@@ -535,5 +724,109 @@ class _SparkleParticlePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SparkleParticlePainter old) => old.progress != progress;
+  bool shouldRepaint(_SparkleParticlePainter old) =>
+      old.progress != progress || old.color != color;
+}
+
+// ── Legendary: rotating golden rays ─────────────────────────────────────────
+
+class _RayPainter extends CustomPainter {
+  _RayPainter(this.progress, this.color);
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height * 0.38;
+    const rayCount = 12;
+    const halfAngle = math.pi / rayCount / 1.6;
+
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.rotate(progress * math.pi * 2);
+
+    final paint = Paint()
+      ..color = color.withOpacity(0.07)
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < rayCount; i++) {
+      final angle = (i / rayCount) * math.pi * 2;
+      final path = Path()
+        ..moveTo(0, 0)
+        ..lineTo(math.cos(angle - halfAngle) * 300,
+            math.sin(angle - halfAngle) * 300)
+        ..lineTo(math.cos(angle + halfAngle) * 300,
+            math.sin(angle + halfAngle) * 300)
+        ..close();
+      canvas.drawPath(path, paint);
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(_RayPainter old) => old.progress != progress;
+}
+
+// ── Epic: shimmer ring pulse ──────────────────────────────────────────────────
+
+class _ShimmerRingPainter extends CustomPainter {
+  _ShimmerRingPainter(this.progress, this.color);
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height * 0.38;
+    // Two staggered rings
+    for (int i = 0; i < 2; i++) {
+      final t = ((progress + i * 0.5) % 1.0);
+      final radius = 60 + t * 120;
+      final opacity = (1 - t) * 0.14;
+      canvas.drawCircle(
+        Offset(cx, cy),
+        radius,
+        Paint()
+          ..color = color.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ShimmerRingPainter old) => old.progress != progress;
+}
+
+// ── Rare: ripple rings ────────────────────────────────────────────────────────
+
+class _RipplePainter extends CustomPainter {
+  _RipplePainter(this.progress, this.color);
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height * 0.38;
+    // Three staggered ripple rings
+    for (int i = 0; i < 3; i++) {
+      final t = ((progress + i / 3.0) % 1.0);
+      final radius = 40 + t * 160;
+      final opacity = (1 - t) * 0.18;
+      canvas.drawCircle(
+        Offset(cx, cy),
+        radius,
+        Paint()
+          ..color = color.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RipplePainter old) => old.progress != progress;
 }

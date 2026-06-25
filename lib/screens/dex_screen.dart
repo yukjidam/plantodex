@@ -299,7 +299,7 @@ class _DexSection extends StatelessWidget {
             crossAxisCount: 2,
             mainAxisSpacing: 10,
             crossAxisSpacing: 10,
-            childAspectRatio: 0.88,
+            childAspectRatio: 0.74,
             children: cards
                 .map((c) => _DexCard(
                       card: c,
@@ -412,6 +412,46 @@ class _DexCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                  const SizedBox(height: 5),
+                  Row(
+                    children: [
+                      const Icon(Icons.calendar_today,
+                          size: 10, color: textMuted),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          _formatDate(card.caughtAt),
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 10,
+                            color: textMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on_outlined,
+                          size: 10, color: textMuted),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          card.location.isNotEmpty
+                              ? card.location
+                              : 'Location unavailable',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 10,
+                            color: textMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -461,6 +501,24 @@ class _PlantMiniIcon extends StatelessWidget {
       ),
     );
   }
+}
+
+String _formatDate(DateTime date) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[date.month - 1]} ${date.day}, ${date.year}';
 }
 
 class _StatPill extends StatelessWidget {

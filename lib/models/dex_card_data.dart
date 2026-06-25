@@ -16,4 +16,11 @@ class DexCardData {
   String get scientificName => caught.scientificName;
 
   String? get photoPath => caught.photoPath;
+
+  /// When this plant was caught.
+  DateTime get caughtAt => caught.caughtAtDate;
+
+  /// Where this plant was caught. Left blank until the location feature
+  /// is wired up — UI should render this even when empty.
+  String get location => '';
 }

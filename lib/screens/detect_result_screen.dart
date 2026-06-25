@@ -9,6 +9,8 @@ import '../widgets/rarity_pill.dart';
 import '../providers/detection_provider.dart';
 import '../repositories/plant_repository.dart';
 import '../services/gbif_service.dart';
+import '../widgets/nature_loader.dart';
+import 'catch_success_args.dart';
 
 class DetectResultScreen extends StatefulWidget {
   const DetectResultScreen({super.key, required this.photo});
@@ -116,7 +118,7 @@ class _LoadingScaffold extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const CircularProgressIndicator(color: green600, strokeWidth: 2.5),
+            const NatureLoader(size: 96),
             const SizedBox(height: 18),
             Text(_message,
                 style: GoogleFonts.spaceGrotesk(
@@ -608,7 +610,8 @@ class _ResultScaffoldBody extends StatelessWidget {
                   20, 12, 20, MediaQuery.of(context).padding.bottom + 14),
               child: Column(
                 children: [
-                  _SaveCatchButton(photo: photo, result: result),
+                  _SaveCatchButton(
+                      photo: photo, result: result, rarity: rarity),
                   const SizedBox(height: 8),
                   Row(
                     children: ['Skip', 'Save for later', 'Share']
@@ -650,9 +653,14 @@ class _ResultScaffoldBody extends StatelessWidget {
 // ── Save button (handles duplicate-catch validation) ──────────────────────────
 
 class _SaveCatchButton extends StatefulWidget {
-  const _SaveCatchButton({required this.photo, required this.result});
+  const _SaveCatchButton({
+    required this.photo,
+    required this.result,
+    required this.rarity,
+  });
   final File photo;
   final PlantResult result;
+  final Rarity rarity;
 
   @override
   State<_SaveCatchButton> createState() => _SaveCatchButtonState();
@@ -672,7 +680,10 @@ class _SaveCatchButtonState extends State<_SaveCatchButton> {
         careInfo: widget.result.careInfo,
       );
       if (context.mounted) {
-        context.push('/catch', extra: widget.result);
+        context.push(
+          '/catch',
+          extra: CatchSuccessArgs(result: widget.result, rarity: widget.rarity),
+        );
       }
     } on DuplicateCatchException {
       if (context.mounted) {
