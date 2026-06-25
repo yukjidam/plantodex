@@ -118,12 +118,16 @@ Four-tab bottom navigation:
 - Delete with confirmation dialog
 
 ### 🚧 Phase 6 — Polish *(in progress)*
-- [x] GBIF-based dynamic rarity (no hardcoded lists)
-- [x] Flicker-free rarity reveal fully loaded before result screen shows
-- [x] Rarity color theming across all surfaces
-- [ ] Catch and scan animations
-- [ ] Search over saved plants
-- [ ] Performance optimization
+* [x] GBIF-based dynamic rarity (no hardcoded lists)
+* [x] Flicker-free rarity reveal fully loaded before result screen shows
+* [x] Rarity color theming across all surfaces
+* [x] Improved plant scanning and identification flow
+* [x] Added animated loading screens with unique themes for each rarity tier
+* [x] Enhanced Dex cards with additional plant information
+* [ ] Catch and scan animations
+* [ ] Search over saved plants
+* [ ] Performance optimization
+
 
 ### 🔮 Later
 - Map screen (real implementation)
