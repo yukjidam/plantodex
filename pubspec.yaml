@@ -60,6 +60,16 @@ dependencies:
   flutter_dotenv: ^5.2.1
   floor: ^1.5.0
 
+  # --- Phase 7 additions (Map) ---
+  # OSM tile map — free, no API key
+  flutter_map: ^7.0.2
+  flutter_map_marker_cluster: ^1.3.2
+  # Coordinate type required by flutter_map
+  latlong2: ^0.9.1
+  # Device GPS (permission already covered by permission_handler above)
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

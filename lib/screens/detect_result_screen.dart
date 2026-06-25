@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:geolocator/geolocator.dart';
 import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../widgets/rarity_pill.dart';
@@ -674,11 +675,38 @@ class _SaveCatchButtonState extends State<_SaveCatchButton> {
     setState(() => _saving = true);
 
     try {
+      // ── 1. Grab GPS ──────────────────────────────────────────────────────
+      double? latitude;
+      double? longitude;
+
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.whileInUse ||
+            permission == LocationPermission.always) {
+          final position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 8),
+          );
+          latitude = position.latitude;
+          longitude = position.longitude;
+        }
+      } catch (e) {
+        debugPrint('[SaveCatch] GPS failed: $e');
+        // Non-fatal — save continues without coordinates
+      }
+
+      // ── 2. Save with GPS ─────────────────────────────────────────────────
       await PlantRepository.instance.saveCatch(
         photo: widget.photo,
         identification: widget.result.identification,
         careInfo: widget.result.careInfo,
+        latitude: latitude,
+        longitude: longitude,
       );
+
       if (context.mounted) {
         context.push(
           '/catch',

@@ -38,6 +38,13 @@ class CaughtPlant {
   /// Absolute path to the saved copy of the scanned photo.
   final String photoPath;
 
+  // ── Location ───────────────────────────────────────────────────────
+  /// GPS coordinates recorded at scan time. Null when the user denied
+  /// location permission or the device had no fix at capture time.
+  /// Added in DB version 2 — nullable so existing rows stay valid.
+  final double? latitude;
+  final double? longitude;
+
   // ── Meta ───────────────────────────────────────────────────────────
   /// Unix milliseconds since epoch.
   final int caughtAt;
@@ -64,6 +71,8 @@ class CaughtPlant {
     this.lightLevel,
     this.atmosphericHumidity,
     required this.photoPath,
+    this.latitude,
+    this.longitude,
     required this.caughtAt,
   });
 

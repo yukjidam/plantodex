@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/caught_plant.dart';
+import '../services/geocoding_service.dart';
 import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../models/plant_rarity_lookup.dart';
@@ -15,10 +16,31 @@ import '../widgets/rarity_pill.dart';
 /// pill, tags, stat boxes, expandable info sections) but reads everything
 /// synchronously from the saved [CaughtPlant] — no network calls, no
 /// FutureBuilder, so it opens instantly.
-class PlantDetailScreen extends StatelessWidget {
+class PlantDetailScreen extends StatefulWidget {
   const PlantDetailScreen({super.key, required this.plant});
 
   final CaughtPlant plant;
+
+  @override
+  State<PlantDetailScreen> createState() => _PlantDetailScreenState();
+}
+
+class _PlantDetailScreenState extends State<PlantDetailScreen> {
+  String? _placeName;
+
+  @override
+  void initState() {
+    super.initState();
+    _reverseGeocode();
+  }
+
+  Future<void> _reverseGeocode() async {
+    final lat = widget.plant.latitude;
+    final lng = widget.plant.longitude;
+    if (lat == null || lng == null) return;
+    final name = await GeocodingService.instance.getPlaceName(lat, lng);
+    if (name != null && mounted) setState(() => _placeName = name);
+  }
 
   void _openFullScreenPhoto(BuildContext context) {
     Navigator.of(context).push(
@@ -27,7 +49,7 @@ class PlantDetailScreen extends StatelessWidget {
         barrierColor: Colors.black,
         transitionDuration: const Duration(milliseconds: 200),
         pageBuilder: (_, __, ___) =>
-            _FullScreenPhotoViewer(photoPath: plant.photoPath),
+            _FullScreenPhotoViewer(photoPath: widget.plant.photoPath),
         transitionsBuilder: (_, animation, __, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -37,6 +59,7 @@ class PlantDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final plant = widget.plant;
     final rarity = parseRarity(plant.rarity);
 
     final tags = <String>[
@@ -200,6 +223,23 @@ class PlantDetailScreen extends StatelessWidget {
                               fontSize: 14,
                               color: textSecondary,
                               fontStyle: FontStyle.italic)),
+
+                      // Location row — only shown when GPS was recorded
+                      if (_placeName != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on_outlined,
+                                size: 13, color: textMuted),
+                            const SizedBox(width: 4),
+                            Text(
+                              _placeName!,
+                              style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 13, color: textMuted),
+                            ),
+                          ],
+                        ),
+                      ],
 
                       const SizedBox(height: 14),
 

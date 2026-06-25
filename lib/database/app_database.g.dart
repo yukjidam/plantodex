@@ -80,7 +80,7 @@ class _$AppDatabase extends AppDatabase {
     Callback? callback,
   ]) async {
     final databaseOptions = sqflite.OpenDatabaseOptions(
-      version: 1,
+      version: 2,
       onConfigure: (database) async {
         await database.execute('PRAGMA foreign_keys = ON');
         await callback?.onConfigure?.call(database);
@@ -96,7 +96,7 @@ class _$AppDatabase extends AppDatabase {
       },
       onCreate: (database, version) async {
         await database.execute(
-            'CREATE TABLE IF NOT EXISTS `caught_plants` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `commonName` TEXT NOT NULL, `scientificName` TEXT NOT NULL, `confidence` REAL NOT NULL, `rarity` TEXT NOT NULL, `description` TEXT NOT NULL, `family` TEXT NOT NULL, `genus` TEXT NOT NULL, `toxicity` TEXT NOT NULL, `edible` INTEGER NOT NULL, `thumbnailUrl` TEXT, `habitat` TEXT, `careTips` TEXT, `propagation` TEXT, `floweringSeason` TEXT, `conservationStatus` TEXT, `funFacts` TEXT, `durationRaw` TEXT NOT NULL, `lightLevel` INTEGER, `atmosphericHumidity` INTEGER, `photoPath` TEXT NOT NULL, `caughtAt` INTEGER NOT NULL)');
+            'CREATE TABLE IF NOT EXISTS `caught_plants` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `commonName` TEXT NOT NULL, `scientificName` TEXT NOT NULL, `confidence` REAL NOT NULL, `rarity` TEXT NOT NULL, `description` TEXT NOT NULL, `family` TEXT NOT NULL, `genus` TEXT NOT NULL, `toxicity` TEXT NOT NULL, `edible` INTEGER NOT NULL, `thumbnailUrl` TEXT, `habitat` TEXT, `careTips` TEXT, `propagation` TEXT, `floweringSeason` TEXT, `conservationStatus` TEXT, `funFacts` TEXT, `durationRaw` TEXT NOT NULL, `lightLevel` INTEGER, `atmosphericHumidity` INTEGER, `photoPath` TEXT NOT NULL, `latitude` REAL, `longitude` REAL, `caughtAt` INTEGER NOT NULL)');
 
         await callback?.onCreate?.call(database, version);
       },
@@ -141,6 +141,8 @@ class _$CaughtPlantDao extends CaughtPlantDao {
                   'lightLevel': item.lightLevel,
                   'atmosphericHumidity': item.atmosphericHumidity,
                   'photoPath': item.photoPath,
+                  'latitude': item.latitude,
+                  'longitude': item.longitude,
                   'caughtAt': item.caughtAt
                 },
             changeListener),
@@ -170,6 +172,8 @@ class _$CaughtPlantDao extends CaughtPlantDao {
                   'lightLevel': item.lightLevel,
                   'atmosphericHumidity': item.atmosphericHumidity,
                   'photoPath': item.photoPath,
+                  'latitude': item.latitude,
+                  'longitude': item.longitude,
                   'caughtAt': item.caughtAt
                 },
             changeListener);
@@ -210,6 +214,8 @@ class _$CaughtPlantDao extends CaughtPlantDao {
             lightLevel: row['lightLevel'] as int?,
             atmosphericHumidity: row['atmosphericHumidity'] as int?,
             photoPath: row['photoPath'] as String,
+            latitude: row['latitude'] as double?,
+            longitude: row['longitude'] as double?,
             caughtAt: row['caughtAt'] as int));
   }
 
@@ -238,6 +244,8 @@ class _$CaughtPlantDao extends CaughtPlantDao {
             lightLevel: row['lightLevel'] as int?,
             atmosphericHumidity: row['atmosphericHumidity'] as int?,
             photoPath: row['photoPath'] as String,
+            latitude: row['latitude'] as double?,
+            longitude: row['longitude'] as double?,
             caughtAt: row['caughtAt'] as int),
         arguments: [id]);
   }
@@ -268,6 +276,8 @@ class _$CaughtPlantDao extends CaughtPlantDao {
             lightLevel: row['lightLevel'] as int?,
             atmosphericHumidity: row['atmosphericHumidity'] as int?,
             photoPath: row['photoPath'] as String,
+            latitude: row['latitude'] as double?,
+            longitude: row['longitude'] as double?,
             caughtAt: row['caughtAt'] as int),
         arguments: [scientificName]);
   }
@@ -312,6 +322,8 @@ class _$CaughtPlantDao extends CaughtPlantDao {
             lightLevel: row['lightLevel'] as int?,
             atmosphericHumidity: row['atmosphericHumidity'] as int?,
             photoPath: row['photoPath'] as String,
+            latitude: row['latitude'] as double?,
+            longitude: row['longitude'] as double?,
             caughtAt: row['caughtAt'] as int),
         queryableName: 'caught_plants',
         isView: false);

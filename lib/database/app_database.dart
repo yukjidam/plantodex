@@ -10,7 +10,20 @@ import '../dao/caught_plant_dao.dart';
 
 part 'app_database.g.dart';
 
-@Database(version: 1, entities: [CaughtPlant])
+// ── Migration: v1 → v2 ────────────────────────────────────────────────────────
+// Adds latitude + longitude to caught_plants. Nullable so existing rows
+// don't need backfilling — plants caught before Phase 7 simply won't appear
+// on the map.
+final _migration1to2 = Migration(1, 2, (db) async {
+  await db.execute(
+    'ALTER TABLE caught_plants ADD COLUMN latitude REAL',
+  );
+  await db.execute(
+    'ALTER TABLE caught_plants ADD COLUMN longitude REAL',
+  );
+});
+
+@Database(version: 2, entities: [CaughtPlant])
 abstract class AppDatabase extends FloorDatabase {
   CaughtPlantDao get caughtPlantDao;
 
@@ -19,8 +32,9 @@ abstract class AppDatabase extends FloorDatabase {
   static AppDatabase? _instance;
 
   static Future<AppDatabase> getInstance() async {
-    _instance ??=
-        await $FloorAppDatabase.databaseBuilder('app_database.db').build();
+    _instance ??= await $FloorAppDatabase
+        .databaseBuilder('app_database.db')
+        .addMigrations([_migration1to2]).build();
     return _instance!;
   }
 }

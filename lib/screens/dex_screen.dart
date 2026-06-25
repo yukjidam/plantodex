@@ -7,6 +7,7 @@ import '../database/app_database.dart';
 import '../models/dex_card_data.dart';
 import '../models/dex_repository.dart';
 import '../repositories/plant_repository.dart';
+import '../services/geocoding_service.dart';
 import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../widgets/rarity_pill.dart';
@@ -790,22 +791,21 @@ class _DexCard extends StatelessWidget {
     final rarity = card.rarity;
     final content = _DexCardContent(card: card, onDelete: onDelete);
 
-    // Legendary: static glow + animated shimmer sweep.
-    if (rarity == Rarity.legendary) {
+    // Legendary / Rare: just a solid-color border in the rarity's accent
+    // — no gradient, no glow shadow, no extra nested Containers. Visually
+    // distinct at a glance, and cheap: a single Container/BoxDecoration
+    // per card instead of three nested ones plus a blurred shadow.
+    if (rarity == Rarity.legendary || rarity == Rarity.rare) {
       return GestureDetector(
         onTap: onTap,
         onLongPress: onDelete,
-        child: _LegendaryCardShell(child: content),
-      );
-    }
-
-    // Rare: static glow only — cheap, no animation, safe at any grid size.
-    if (rarity == Rarity.rare) {
-      return GestureDetector(
-        onTap: onTap,
-        onLongPress: onDelete,
-        child: _GlowCardShell(
-          accent: _rarityAccent(rarity),
+        child: Container(
+          decoration: BoxDecoration(
+            color: surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _rarityAccent(rarity), width: 1.5),
+          ),
+          clipBehavior: Clip.hardEdge,
           child: content,
         ),
       );
@@ -828,164 +828,36 @@ class _DexCard extends StatelessWidget {
   }
 }
 
-/// Static glow shell for Rare cards: gradient border + soft outer glow.
-/// Pure decoration, no animation — safe to repeat across an entire grid.
-class _GlowCardShell extends StatelessWidget {
-  const _GlowCardShell({required this.accent, required this.child});
-
-  final Color accent;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: accent.withOpacity(0.35),
-              blurRadius: 14,
-              spreadRadius: 0.5,
-            ),
-          ],
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [accent.withOpacity(0.9), accent.withOpacity(0.35)],
-            ),
-          ),
-          padding: const EdgeInsets.all(1.4),
-          child: Container(
-            decoration: BoxDecoration(
-              color: surface,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            clipBehavior: Clip.hardEdge,
-            child: child,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Legendary shell: same static glow treatment as Rare, plus a slow
-/// shimmer sweep across the card. Animation is scoped to this single
-/// widget (one AnimationController per Legendary card), so cost scales
-/// only with how many Legendary catches are visible — typically very few.
-class _LegendaryCardShell extends StatefulWidget {
-  const _LegendaryCardShell({required this.child});
-
-  final Widget child;
-
-  @override
-  State<_LegendaryCardShell> createState() => _LegendaryCardShellState();
-}
-
-class _LegendaryCardShellState extends State<_LegendaryCardShell>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const accent = Color(0xFFFF6432); // legendary accent
-    // RepaintBoundary isolates this card's repeated shimmer repaints so
-    // they don't force neighboring grid cells to repaint too — matters
-    // more on lower-end devices where every avoided repaint counts,
-    // especially while the grid is scrolling.
-    return RepaintBoundary(
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: accent.withOpacity(0.45),
-              blurRadius: 18,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [accent, Color(0xFFFFC864)],
-            ),
-          ),
-          padding: const EdgeInsets.all(1.6),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(11),
-            child: Stack(
-              children: [
-                Container(color: surface, child: widget.child),
-                // Shimmer sweep overlay — a translucent diagonal gradient
-                // band that sweeps across the card. Painted directly (not
-                // via ShaderMask) so it composites as a simple highlight
-                // tint rather than replacing pixels underneath.
-                Positioned.fill(
-                  child: IgnorePointer(
-                    child: AnimatedBuilder(
-                      animation: _ctrl,
-                      builder: (context, _) {
-                        final t = _ctrl.value;
-                        final dx = (t * 2.6) - 0.8;
-                        return DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment(-1 + dx, -1),
-                              end: Alignment(0 + dx, 1),
-                              colors: [
-                                Colors.white.withOpacity(0),
-                                Colors.white.withOpacity(0.22),
-                                Colors.white.withOpacity(0),
-                              ],
-                              stops: const [0.35, 0.5, 0.65],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DexCardContent extends StatelessWidget {
+class _DexCardContent extends StatefulWidget {
   const _DexCardContent({required this.card, required this.onDelete});
 
   final DexCardData card;
   final VoidCallback onDelete;
 
   @override
+  State<_DexCardContent> createState() => _DexCardContentState();
+}
+
+class _DexCardContentState extends State<_DexCardContent> {
+  String? _placeName;
+
+  @override
+  void initState() {
+    super.initState();
+    _reverseGeocode();
+  }
+
+  Future<void> _reverseGeocode() async {
+    final lat = widget.card.caught.latitude;
+    final lng = widget.card.caught.longitude;
+    if (lat == null || lng == null) return;
+    final name = await GeocodingService.instance.getPlaceName(lat, lng);
+    if (name != null && mounted) setState(() => _placeName = name);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final card = widget.card;
     final rarity = card.rarity;
 
     return Column(
@@ -1027,7 +899,7 @@ class _DexCardContent extends StatelessWidget {
                 top: 7,
                 left: 7,
                 child: GestureDetector(
-                  onTap: onDelete,
+                  onTap: widget.onDelete,
                   child: Container(
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
@@ -1098,9 +970,7 @@ class _DexCardContent extends StatelessWidget {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        card.location.isNotEmpty
-                            ? card.location
-                            : 'Location unavailable',
+                        _placeName ?? 'Location unavailable',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 10,
                           color: textMuted,

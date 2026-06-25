@@ -42,4 +42,10 @@
             <data android:mimeType="text/plain"/>
         </intent>
     </queries>
+
+    <!-- Required for OSM tile downloads (flutter_map) and all API calls -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Required for device GPS (geolocator) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
 </manifest>

@@ -95,10 +95,15 @@ class PlantRepository {
 
   /// Copies [photo] into the app's documents directory, then saves all
   /// plant data to the database. Returns the new row's id.
+  ///
+  /// [latitude] and [longitude] are optional — pass them when available from
+  /// LocationService. Null means the plant won't appear on the map.
   Future<int> saveCatch({
     required File photo,
     required PlantIdentification identification,
     required PlantCareInfo careInfo,
+    double? latitude,
+    double? longitude,
   }) async {
     if (await alreadyCaught(identification.scientificName)) {
       throw DuplicateCatchException(identification.scientificName);
@@ -131,6 +136,8 @@ class PlantRepository {
       lightLevel: careInfo.lightLevel,
       atmosphericHumidity: careInfo.atmosphericHumidity,
       photoPath: savedPhotoPath,
+      latitude: latitude,
+      longitude: longitude,
       caughtAt: DateTime.now().millisecondsSinceEpoch,
     );
 

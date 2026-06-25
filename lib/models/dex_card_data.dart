@@ -20,9 +20,14 @@ class DexCardData {
   /// When this plant was caught.
   DateTime get caughtAt => caught.caughtAtDate;
 
-  /// Where this plant was caught. Left blank until the location feature
-  /// is wired up — UI should render this even when empty.
-  String get location => '';
+  /// Where this plant was caught, formatted as "lat, lng" to 4 decimal
+  /// places. Empty when no GPS was recorded (permission denied or no fix).
+  String get location {
+    final lat = caught.latitude;
+    final lng = caught.longitude;
+    if (lat == null || lng == null) return '';
+    return '${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)}';
+  }
 
   /// Identification confidence, 0-100.
   int get confidencePercent => caught.confidencePercent;
