@@ -26,6 +26,15 @@ dependencies:
   # Image loading & caching
   cached_network_image: ^3.4.1
 
+  # Image picking from gallery
+  image_picker: ^1.1.2
+
+  # Shutter sound
+  audioplayers: ^6.1.0
+
+  # Save captures to device gallery
+  gal: ^2.3.0
+
   # Camera
   camera: ^0.11.0+2
 

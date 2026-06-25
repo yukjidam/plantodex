@@ -8,7 +8,6 @@ GeneratedPluginRegistrant.java
 .cxx/
 
 # Environment variables
-.env
 **/.env
 
 # Remember to never publicly share your keystore.

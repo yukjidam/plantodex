@@ -1,14 +1,18 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import '../theme/colors.dart';
 import '../services/camera_service.dart';
 import '../services/permission_service.dart';
 import '../services/frame_quality_service.dart';
 import '../services/image_crop_service.dart';
+import '../services/shutter_sound_service.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key});
@@ -21,7 +25,15 @@ class _ScanScreenState extends State<ScanScreen>
     with WidgetsBindingObserver, TickerProviderStateMixin {
   // ── Services ───────────────────────────────────────────────────────────────
   final _camera = CameraService();
-  final _frameQuality = FrameQualityService();
+  late FrameQualityService _frameQuality;
+  final _shutterSound = ShutterSoundService();
+
+  // ── Settings ───────────────────────────────────────────────────────────────
+  bool _gridEnabled = false;
+  bool _soundEnabled = true;
+  bool _saveToGallery = false;
+  // 0 = relaxed, 1 = normal (default), 2 = strict
+  int _qualityLevel = 1;
 
   // ── State ──────────────────────────────────────────────────────────────────
   _ScreenState _screenState = _ScreenState.checkingPermission;
@@ -105,8 +117,34 @@ class _ScanScreenState extends State<ScanScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _frameQuality = _buildFrameQualityService();
+    _shutterSound.init();
     _initAnimations();
     _initCamera();
+  }
+
+  /// Builds a [FrameQualityService] tuned to the current [_qualityLevel].
+  ///
+  /// level 0 – relaxed  (easier to get "good")
+  /// level 1 – normal   (factory defaults)
+  /// level 2 – strict   (harder to get "good")
+  FrameQualityService _buildFrameQualityService() {
+    switch (_qualityLevel) {
+      case 0:
+        return FrameQualityService(
+          minAcceptableBrightness: 40,
+          maxAcceptableBrightness: 235,
+          minAcceptableSharpness: 7,
+        );
+      case 2:
+        return FrameQualityService(
+          minAcceptableBrightness: 70,
+          maxAcceptableBrightness: 210,
+          minAcceptableSharpness: 20,
+        );
+      default: // 1 – normal
+        return FrameQualityService();
+    }
   }
 
   void _initAnimations() {
@@ -135,6 +173,16 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _initCamera() async {
+    // ── 1. Check connectivity first ──────────────────────────────────────────
+    final results = await Connectivity().checkConnectivity();
+    final isOffline = results.every((r) => r == ConnectivityResult.none);
+    if (isOffline) {
+      if (mounted) setState(() => _screenState = _ScreenState.offline);
+      _watchConnectivity();
+      return;
+    }
+
+    // ── 2. Camera permission ─────────────────────────────────────────────────
     final status = await PermissionService.requestCamera();
 
     if (status == CameraPermissionStatus.granted) {
@@ -147,7 +195,28 @@ class _ScanScreenState extends State<ScanScreen>
     }
   }
 
+  /// Listens for connectivity to return and auto-retries initialisation.
+  void _watchConnectivity() {
+    _connectivitySub?.cancel();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final isOnline = results.any((r) => r != ConnectivityResult.none);
+      if (isOnline && mounted) {
+        _connectivitySub?.cancel();
+        _connectivitySub = null;
+        _initCamera();
+      }
+    });
+  }
+
+  /// Opens the device photo library and sends the picked image to /detect.
+  Future<void> _pickFromGallery() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null || !mounted) return;
+    context.push('/detect', extra: File(picked.path));
+  }
+
   StreamSubscription<FrameQuality>? _qualitySub;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   Future<void> _startCamera() async {
     try {
@@ -187,7 +256,9 @@ class _ScanScreenState extends State<ScanScreen>
     _scanCtrl.dispose();
     _pulseCtrl.dispose();
     _qualitySub?.cancel();
+    _connectivitySub?.cancel();
     _frameQuality.dispose();
+    _shutterSound.dispose();
     _camera.dispose();
     super.dispose();
   }
@@ -197,6 +268,11 @@ class _ScanScreenState extends State<ScanScreen>
   Future<void> _capture() async {
     if (_isCapturing || _screenState != _ScreenState.ready) return;
     setState(() => _isCapturing = true);
+
+    // Play shutter sound immediately so it feels responsive.
+    if (_soundEnabled) {
+      _shutterSound.play();
+    }
 
     try {
       final file = await _camera.capture();
@@ -222,6 +298,15 @@ class _ScanScreenState extends State<ScanScreen>
           debugPrint('[Scan] Crop failed, using uncropped photo: $e');
         } finally {
           if (mounted) setState(() => _isCropping = false);
+        }
+      }
+
+      // Save a copy to the device gallery if the user opted in.
+      if (_saveToGallery) {
+        try {
+          await Gal.putImage(toSend.path);
+        } catch (e) {
+          debugPrint('[Scan] Save to gallery failed: $e');
         }
       }
 
@@ -311,6 +396,7 @@ class _ScanScreenState extends State<ScanScreen>
         _ScreenState.permissionPermanentlyDenied => _buildPermissionDenied(
             permanent: true,
           ),
+        _ScreenState.offline => _buildOffline(),
         _ScreenState.error => _buildError(),
         _ScreenState.ready => _buildCamera(),
       },
@@ -358,6 +444,9 @@ class _ScanScreenState extends State<ScanScreen>
             ),
           ),
 
+          // Rule-of-thirds grid overlay
+          if (_gridEnabled) IgnorePointer(child: const _GridOverlay()),
+
           // Tap-to-focus ring — appears at the tapped screen position.
           if (_showFocusRing && _focusIndicator != null)
             Positioned(
@@ -394,7 +483,7 @@ class _ScanScreenState extends State<ScanScreen>
                           letterSpacing: 3,
                         ),
                       ),
-                      _TopBtn(icon: Icons.tune_rounded, onTap: () {}),
+                      _TopBtn(icon: Icons.tune_rounded, onTap: _showSettings),
                     ],
                   ),
                 ),
@@ -439,7 +528,7 @@ class _ScanScreenState extends State<ScanScreen>
                       _SideBtn(
                         icon: Icons.photo_library_outlined,
                         label: 'Gallery',
-                        onTap: () {},
+                        onTap: _pickFromGallery,
                       ),
                       _ShutterButton(
                           isCapturing: _isCapturing, onTap: _capture),
@@ -541,6 +630,95 @@ class _ScanScreenState extends State<ScanScreen>
     );
   }
 
+  // ── Offline ────────────────────────────────────────────────────────────────
+
+  Widget _buildOffline() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 36),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 52, color: Colors.white30),
+            const SizedBox(height: 20),
+            Text(
+              'No internet connection',
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'PlantoDex needs a connection to identify plants. '
+              "We'll retry automatically when you're back online.",
+              textAlign: TextAlign.center,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 14,
+                color: Colors.white54,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 28),
+            SizedBox(
+              width: 220,
+              child: ElevatedButton(
+                onPressed: _initCamera,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: green600,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: Text(
+                  'Retry',
+                  style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Settings bottom sheet ──────────────────────────────────────────────────
+
+  void _showSettings() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A1A),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _SettingsSheet(
+        gridEnabled: _gridEnabled,
+        soundEnabled: _soundEnabled,
+        saveToGallery: _saveToGallery,
+        qualityLevel: _qualityLevel,
+        onGridChanged: (v) => setState(() => _gridEnabled = v),
+        onSoundChanged: (v) => setState(() => _soundEnabled = v),
+        onSaveToGalleryChanged: (v) => setState(() => _saveToGallery = v),
+        onQualityChanged: (v) {
+          if (v == _qualityLevel) return;
+          // Rebuild the quality service with new thresholds, re-subscribe.
+          _qualitySub?.cancel();
+          _qualitySub = null;
+          _frameQuality.dispose();
+          setState(() {
+            _qualityLevel = v;
+            _frameQuality = _buildFrameQualityService();
+          });
+          _startLiveQualityCheck();
+        },
+      ),
+    );
+  }
+
   // ── Error ──────────────────────────────────────────────────────────────────
 
   Widget _buildError() {
@@ -575,6 +753,7 @@ enum _ScreenState {
   loading,
   permissionDenied,
   permissionPermanentlyDenied,
+  offline,
   error,
   ready,
 }
@@ -1106,6 +1285,326 @@ class _ShutterButtonState extends State<_ShutterButton>
                         ),
                       )
                     : const Text('🌿', style: TextStyle(fontSize: 28)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Rule-of-thirds grid overlay ───────────────────────────────────────────────
+
+class _GridOverlay extends StatelessWidget {
+  const _GridOverlay();
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(painter: _GridPainter());
+  }
+}
+
+class _GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.18)
+      ..strokeWidth = 0.8;
+
+    for (final x in [size.width / 3, size.width * 2 / 3]) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (final y in [size.height / 3, size.height * 2 / 3]) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GridPainter old) => false;
+}
+
+// ── Settings bottom sheet widget ──────────────────────────────────────────────
+
+class _SettingsSheet extends StatefulWidget {
+  const _SettingsSheet({
+    required this.gridEnabled,
+    required this.soundEnabled,
+    required this.saveToGallery,
+    required this.qualityLevel,
+    required this.onGridChanged,
+    required this.onSoundChanged,
+    required this.onSaveToGalleryChanged,
+    required this.onQualityChanged,
+  });
+
+  final bool gridEnabled;
+  final bool soundEnabled;
+  final bool saveToGallery;
+  final int qualityLevel;
+  final ValueChanged<bool> onGridChanged;
+  final ValueChanged<bool> onSoundChanged;
+  final ValueChanged<bool> onSaveToGalleryChanged;
+  final ValueChanged<int> onQualityChanged;
+
+  @override
+  State<_SettingsSheet> createState() => _SettingsSheetState();
+}
+
+class _SettingsSheetState extends State<_SettingsSheet> {
+  late bool _grid;
+  late bool _sound;
+  late bool _save;
+  late int _quality;
+
+  @override
+  void initState() {
+    super.initState();
+    _grid = widget.gridEnabled;
+    _sound = widget.soundEnabled;
+    _save = widget.saveToGallery;
+    _quality = widget.qualityLevel;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).viewInsets.bottom +
+        MediaQuery.of(context).padding.bottom +
+        24;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(24, 16, 24, bottomPad),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Drag handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Scan Settings',
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // ── Toggles ──────────────────────────────────────────────────────
+          _SettingToggle(
+            icon: Icons.grid_3x3_rounded,
+            label: 'Grid overlay',
+            subtitle: 'Rule-of-thirds lines on viewfinder',
+            value: _grid,
+            onChanged: (v) {
+              setState(() => _grid = v);
+              widget.onGridChanged(v);
+            },
+          ),
+          _SettingToggle(
+            icon: Icons.volume_up_rounded,
+            label: 'Shutter sound',
+            subtitle: 'Nature-themed capture sound',
+            value: _sound,
+            onChanged: (v) {
+              setState(() => _sound = v);
+              widget.onSoundChanged(v);
+            },
+          ),
+          _SettingToggle(
+            icon: Icons.save_alt_rounded,
+            label: 'Save to gallery',
+            subtitle: 'Auto-save captures to device photos',
+            value: _save,
+            onChanged: (v) {
+              setState(() => _save = v);
+              widget.onSaveToGalleryChanged(v);
+            },
+          ),
+
+          const SizedBox(height: 24),
+
+          // ── Quality threshold ────────────────────────────────────────────
+          Text(
+            'Shot quality threshold',
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'How strict the "Good shot" indicator is',
+            style:
+                GoogleFonts.spaceGrotesk(fontSize: 12, color: Colors.white38),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _QualityChip(
+                label: 'Relaxed',
+                value: 0,
+                selected: _quality,
+                onTap: (v) {
+                  setState(() => _quality = v);
+                  widget.onQualityChanged(v);
+                },
+              ),
+              const SizedBox(width: 8),
+              _QualityChip(
+                label: 'Normal',
+                value: 1,
+                selected: _quality,
+                onTap: (v) {
+                  setState(() => _quality = v);
+                  widget.onQualityChanged(v);
+                },
+              ),
+              const SizedBox(width: 8),
+              _QualityChip(
+                label: 'Strict',
+                value: 2,
+                selected: _quality,
+                onTap: (v) {
+                  setState(() => _quality = v);
+                  widget.onQualityChanged(v);
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Setting toggle row ────────────────────────────────────────────────────────
+
+class _SettingToggle extends StatelessWidget {
+  const _SettingToggle({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: value
+                  ? green600.withOpacity(0.25)
+                  : Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              size: 18,
+              color: value ? green300 : Colors.white38,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 12,
+                    color: Colors.white38,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: green300,
+            activeTrackColor: green600.withOpacity(0.5),
+            inactiveThumbColor: Colors.white30,
+            inactiveTrackColor: Colors.white12,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Quality threshold chip ────────────────────────────────────────────────────
+
+class _QualityChip extends StatelessWidget {
+  const _QualityChip({
+    required this.label,
+    required this.value,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final int value;
+  final int selected;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isSelected = value == selected;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onTap(value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? green600.withOpacity(0.35)
+                : Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? green300.withOpacity(0.6) : Colors.white12,
+              width: 1,
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? green300 : Colors.white38,
               ),
             ),
           ),
