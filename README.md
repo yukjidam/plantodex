@@ -46,7 +46,7 @@ Everything else — the map, the profile, the streaks — is in service of this 
 | UI | Flutter |
 | Camera | image_picker / camera |
 | Networking | http |
-| Local Storage | Drift (SQLite) |
+| Local Storage | Floor (SQLite ORM) |
 | Architecture | Provider + Repository pattern |
 
 ### APIs
@@ -83,9 +83,24 @@ Four-tab bottom navigation:
 | Tab | Description |
 |---|---|
 | 📷 **Scan** | Camera capture + identification flow |
-| 📖 **Dex** | Personal collection album, sorted by rarity |
+| 📖 **Dex** | Personal collection album, sorted and grouped by rarity |
 | 🗺️ **Map** | Where each plant was scanned *(planned)* |
 | 👤 **Profile** | Levels, achievements, streaks *(planned)* |
+
+---
+
+## System Requirements
+
+| Requirement | Value |
+|---|---|
+| Minimum Android version | Determined by Flutter's default `minSdkVersion` for the installed SDK (not pinned in `build.gradle.kts` — it delegates to `flutter.minSdkVersion`). Not yet pinned down exactly; run `flutter build apk` and check the merged manifest, or hardcode `minSdk` in `android/app/build.gradle.kts` for a guaranteed number. |
+| Target / Compile SDK | Android API 36 (resolved from installed Android SDK 36.1.0 via `flutter.targetSdkVersion` / `flutter.compileSdkVersion`) |
+| Flutter SDK | 3.41.6 (stable channel) |
+| Dart SDK | `>=3.3.0 <4.0.0` (per `pubspec.yaml`); 3.11.4 installed |
+| Java/Kotlin | JDK 17 (`sourceCompatibility` / `kotlinOptions.jvmTarget`) |
+| Camera | Required (core scan flow) |
+| Storage | Local SQLite via Floor — collection grows with usage |
+| Network | Required for identification (Pl@ntNet, Wikipedia, GBIF); offline state is handled gracefully but scanning needs connectivity |
 
 ---
 
@@ -108,11 +123,11 @@ Four-tab bottom navigation:
 
 ### ✅ Phase 4 — Catch Result + Storage
 - Catch result screen (name, scientific name, rarity badge, care info)
-- Drift database schema for caught plants
+- Floor database schema for caught plants
 - Save successful catches to local DB
 
 ### ✅ Phase 5 — Dex Screen
-- Flat album grid backed by a Drift stream query
+- Flat album grid backed by a Floor stream query
 - Cards sorted by rarity tier then most recently caught
 - Rarity pill on every card, determined by GBIF at catch time
 - Delete with confirmation dialog
@@ -123,11 +138,15 @@ Four-tab bottom navigation:
 * [x] Rarity color theming across all surfaces
 * [x] Improved plant scanning and identification flow
 * [x] Added animated loading screens with unique themes for each rarity tier
-* [x] Enhanced Dex cards with additional plant information
+* [x] Enhanced Dex cards with additional plant information (catch date, location placeholder, ID confidence, XP)
+* [x] Dedicated plant detail screen, opened from the Dex, with a tap-to-zoom full-screen photo viewer
+* [x] Functional Dex search (name, scientific name, family)
+* [x] Rarity filter chips and sort control (newest, A–Z, rarity) on the Dex
+* [x] Dex grouped into per-rarity sections, with special gradient styling for Rare/Legendary headers
+* [x] Rare and Legendary catches get distinct card treatment — static glow border for Rare, animated shimmer sweep for Legendary
+* [x] Performance pass: capped image decode resolution on Dex thumbnails and the detail screen's hero image, converted the Dex grid to a lazily-built `SliverGrid`, isolated expensive card repaints behind `RepaintBoundary`, and moved the scan screen's live frame-quality updates off the main `setState` path so the camera UI no longer rebuilds in full on every analysed frame
 * [ ] Catch and scan animations
-* [ ] Search over saved plants
-* [ ] Performance optimization
-
+* [ ] Performance optimization *(ongoing — see above; image pipeline and camera screen done, further passes as new screens land)*
 
 ### 🔮 Later
 - Map screen (real implementation)
