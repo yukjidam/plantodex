@@ -18,14 +18,29 @@ class DexScreen extends StatefulWidget {
   State<DexScreen> createState() => _DexScreenState();
 }
 
+enum DexSortOrder { dateNewest, nameAZ, rarity }
+
 class _DexScreenState extends State<DexScreen> {
   Stream<DexSections>? _sectionsStream;
   PlantRepository? _repository;
+  final _searchController = TextEditingController();
+  String _query = '';
+  Rarity? _rarityFilter; // null = All
+  DexSortOrder _sortOrder = DexSortOrder.dateNewest;
 
   @override
   void initState() {
     super.initState();
     _init();
+    _searchController.addListener(() {
+      setState(() => _query = _searchController.text.trim());
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _init() async {
@@ -105,6 +120,13 @@ class _DexScreenState extends State<DexScreen> {
                 final sections = snapshot.data ?? DexSections.empty;
                 return _DexScreenBody(
                   sections: sections,
+                  query: _query,
+                  searchController: _searchController,
+                  rarityFilter: _rarityFilter,
+                  onRarityFilterChanged: (r) =>
+                      setState(() => _rarityFilter = r),
+                  sortOrder: _sortOrder,
+                  onSortOrderChanged: (s) => setState(() => _sortOrder = s),
                   onDelete: (card) => _deleteCatch(context, card),
                 );
               },
@@ -113,30 +135,115 @@ class _DexScreenState extends State<DexScreen> {
   }
 }
 
+List<DexCardData> _filterCards(
+  List<DexCardData> cards,
+  String query,
+  Rarity? rarityFilter,
+) {
+  var result = cards;
+  if (rarityFilter != null) {
+    result = result.where((c) => c.rarity == rarityFilter).toList();
+  }
+  if (query.isNotEmpty) {
+    final q = query.toLowerCase();
+    result = result.where((c) {
+      return c.commonName.toLowerCase().contains(q) ||
+          c.scientificName.toLowerCase().contains(q) ||
+          c.family.toLowerCase().contains(q);
+    }).toList();
+  }
+  return result;
+}
+
+/// Accent color per rarity, matching the palette already used by
+/// _PlantMiniIcon — kept as solid (non-opacity) colors here since chips/
+/// glows need a true accent, not a translucent overlay tint.
+Color _rarityAccent(Rarity rarity) => switch (rarity) {
+      Rarity.common => textMuted,
+      Rarity.rare => const Color(0xFF9A60D0),
+      Rarity.epic => const Color(0xFFC04080),
+      Rarity.legendary => const Color(0xFFFF6432),
+    };
+
+int _rarityRank(Rarity r) => switch (r) {
+      Rarity.legendary => 0,
+      Rarity.epic => 1,
+      Rarity.rare => 2,
+      Rarity.common => 3,
+    };
+
+List<DexCardData> _sortCards(List<DexCardData> cards, DexSortOrder order) {
+  final sorted = [...cards];
+  switch (order) {
+    case DexSortOrder.dateNewest:
+      sorted.sort((a, b) => b.caughtAt.compareTo(a.caughtAt));
+    case DexSortOrder.nameAZ:
+      sorted.sort((a, b) =>
+          a.commonName.toLowerCase().compareTo(b.commonName.toLowerCase()));
+    case DexSortOrder.rarity:
+      sorted.sort(
+          (a, b) => _rarityRank(a.rarity).compareTo(_rarityRank(b.rarity)));
+  }
+  return sorted;
+}
+
+/// Groups already-filtered/sorted cards into rarity sections, ordered
+/// Legendary → Epic → Rare → Common. Empty groups are omitted by the caller.
+Map<Rarity, List<DexCardData>> _groupByRarity(List<DexCardData> cards) {
+  final groups = <Rarity, List<DexCardData>>{
+    Rarity.legendary: [],
+    Rarity.epic: [],
+    Rarity.rare: [],
+    Rarity.common: [],
+  };
+  for (final c in cards) {
+    groups[c.rarity]!.add(c);
+  }
+  return groups;
+}
+
 class _DexScreenBody extends StatelessWidget {
-  const _DexScreenBody({required this.sections, required this.onDelete});
+  const _DexScreenBody({
+    required this.sections,
+    required this.query,
+    required this.searchController,
+    required this.rarityFilter,
+    required this.onRarityFilterChanged,
+    required this.sortOrder,
+    required this.onSortOrderChanged,
+    required this.onDelete,
+  });
 
   final DexSections sections;
+  final String query;
+  final TextEditingController searchController;
+  final Rarity? rarityFilter;
+  final ValueChanged<Rarity?> onRarityFilterChanged;
+  final DexSortOrder sortOrder;
+  final ValueChanged<DexSortOrder> onSortOrderChanged;
   final Future<void> Function(DexCardData) onDelete;
 
   @override
   Widget build(BuildContext context) {
     final stats = sections.stats;
     final isEmpty = sections.all.isEmpty;
+    final filtered = _filterCards(sections.all, query, rarityFilter);
+    final sorted = _sortCards(filtered, sortOrder);
+    final noMatches = !isEmpty &&
+        (query.isNotEmpty || rarityFilter != null) &&
+        sorted.isEmpty;
+    final grouped = _groupByRarity(sorted);
 
     return CustomScrollView(
       slivers: [
-        // ── Top bar ──────────────────────────────────────────────────────
+        // ── Title + stat pills (scrolls away) ───────────────────────────
         SliverToBoxAdapter(
           child: Container(
-            decoration: const BoxDecoration(
-              color: surface,
-              border: Border(bottom: BorderSide(color: borderColor)),
-            ),
+            color: surface,
             child: SafeArea(
               bottom: false,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -186,27 +293,23 @@ class _DexScreenBody extends StatelessWidget {
                         _StatPill('${stats.legendaryCount}', 'Legendary'),
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 9),
-                      decoration: BoxDecoration(
-                        color: surface2,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: borderColor),
-                      ),
-                      child: Row(children: [
-                        const Icon(Icons.search, size: 16, color: textMuted),
-                        const SizedBox(width: 9),
-                        Text('Search plants…',
-                            style: GoogleFonts.spaceGrotesk(
-                                fontSize: 14, color: textMuted)),
-                      ]),
-                    ),
                   ],
                 ),
               ),
             ),
+          ),
+        ),
+
+        // ── Sticky: search + filter chips + sort ────────────────────────
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _StickySearchHeader(
+            searchController: searchController,
+            query: query,
+            rarityFilter: rarityFilter,
+            onRarityFilterChanged: onRarityFilterChanged,
+            sortOrder: sortOrder,
+            onSortOrderChanged: onSortOrderChanged,
           ),
         ),
 
@@ -216,18 +319,255 @@ class _DexScreenBody extends StatelessWidget {
             hasScrollBody: false,
             child: _EmptyState(),
           )
-        else
-          _DexSection(
-            title: 'My Collection',
-            cards: sections.all,
-            onTap: (c) {
-              context.push('/detect');
-            },
-            onDelete: onDelete,
-          ),
+        else if (noMatches)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _NoMatchesState(query: query, rarityFilter: rarityFilter),
+          )
+        else ...[
+          for (final rarity in [
+            Rarity.legendary,
+            Rarity.epic,
+            Rarity.rare,
+            Rarity.common,
+          ])
+            if (grouped[rarity]!.isNotEmpty)
+              _DexSection(
+                rarity: rarity,
+                cards: grouped[rarity]!,
+                onTap: (c) {
+                  context.push('/dex/detail', extra: c.caught);
+                },
+                onDelete: onDelete,
+              ),
+        ],
 
         const SliverToBoxAdapter(child: SizedBox(height: 80)),
       ],
+    );
+  }
+}
+
+class _StickySearchHeader extends SliverPersistentHeaderDelegate {
+  _StickySearchHeader({
+    required this.searchController,
+    required this.query,
+    required this.rarityFilter,
+    required this.onRarityFilterChanged,
+    required this.sortOrder,
+    required this.onSortOrderChanged,
+  });
+
+  final TextEditingController searchController;
+  final String query;
+  final Rarity? rarityFilter;
+  final ValueChanged<Rarity?> onRarityFilterChanged;
+  final DexSortOrder sortOrder;
+  final ValueChanged<DexSortOrder> onSortOrderChanged;
+
+  static const double _height = 116;
+
+  @override
+  double get minExtent => _height;
+
+  @override
+  double get maxExtent => _height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: surface,
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: surface2,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: borderColor),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.search, size: 16, color: textMuted),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: TextField(
+                          controller: searchController,
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 14,
+                            color: textPrimary,
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            border: InputBorder.none,
+                            hintText: 'Search plants…',
+                            hintStyle: GoogleFonts.spaceGrotesk(
+                              fontSize: 14,
+                              color: textMuted,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (query.isNotEmpty)
+                        GestureDetector(
+                          onTap: searchController.clear,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 9),
+                            child:
+                                Icon(Icons.close, size: 16, color: textMuted),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _SortButton(
+                sortOrder: sortOrder,
+                onChanged: onSortOrderChanged,
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          SizedBox(
+            height: 30,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                _RarityChip(
+                  label: 'All',
+                  selected: rarityFilter == null,
+                  onTap: () => onRarityFilterChanged(null),
+                ),
+                const SizedBox(width: 7),
+                for (final r in [
+                  Rarity.common,
+                  Rarity.rare,
+                  Rarity.epic,
+                  Rarity.legendary,
+                ]) ...[
+                  _RarityChip(
+                    label: r.name[0].toUpperCase() + r.name.substring(1),
+                    selected: rarityFilter == r,
+                    color: _rarityAccent(r),
+                    onTap: () =>
+                        onRarityFilterChanged(rarityFilter == r ? null : r),
+                  ),
+                  const SizedBox(width: 7),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _StickySearchHeader oldDelegate) {
+    return oldDelegate.query != query ||
+        oldDelegate.rarityFilter != rarityFilter ||
+        oldDelegate.sortOrder != sortOrder ||
+        oldDelegate.searchController != searchController;
+  }
+}
+
+class _RarityChip extends StatelessWidget {
+  const _RarityChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.color,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final chipColor = color ?? green600;
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? chipColor.withOpacity(0.15) : surface2,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? chipColor : borderColor,
+            width: selected ? 1.3 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.spaceGrotesk(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: selected ? chipColor : textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SortButton extends StatelessWidget {
+  const _SortButton({required this.sortOrder, required this.onChanged});
+
+  final DexSortOrder sortOrder;
+  final ValueChanged<DexSortOrder> onChanged;
+
+  String _label(DexSortOrder o) => switch (o) {
+        DexSortOrder.dateNewest => 'Newest',
+        DexSortOrder.nameAZ => 'A–Z',
+        DexSortOrder.rarity => 'Rarity',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<DexSortOrder>(
+      initialValue: sortOrder,
+      onSelected: onChanged,
+      color: surface2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      itemBuilder: (context) => DexSortOrder.values
+          .map((o) => PopupMenuItem(
+                value: o,
+                child: Text(_label(o),
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      color: textPrimary,
+                      fontWeight:
+                          o == sortOrder ? FontWeight.w700 : FontWeight.w400,
+                    )),
+              ))
+          .toList(),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+        decoration: BoxDecoration(
+          color: surface2,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.swap_vert, size: 16, color: textMuted),
+            const SizedBox(width: 5),
+            Text(_label(sortOrder),
+                style: GoogleFonts.spaceGrotesk(
+                    fontSize: 12, color: textSecondary)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -264,53 +604,172 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
+class _NoMatchesState extends StatelessWidget {
+  const _NoMatchesState({required this.query, required this.rarityFilter});
+
+  final String query;
+  final Rarity? rarityFilter;
+
+  String get _rarityLabel => switch (rarityFilter) {
+        Rarity.common => 'Common',
+        Rarity.rare => 'Rare',
+        Rarity.epic => 'Epic',
+        Rarity.legendary => 'Legendary',
+        null => '',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final hasQuery = query.isNotEmpty;
+    final hasRarity = rarityFilter != null;
+
+    final String title;
+    final String subtitle;
+    if (hasQuery && hasRarity) {
+      title = 'No $_rarityLabel matches for "$query"';
+      subtitle = 'Try a different name, or clear the rarity filter';
+    } else if (hasRarity) {
+      title = 'No $_rarityLabel plants yet';
+      subtitle = 'Catch one to see it here';
+    } else {
+      title = 'No matches for "$query"';
+      subtitle = 'Try a different name or family';
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasRarity && !hasQuery ? Icons.eco_outlined : Icons.search_off,
+              size: 40,
+              color: textMuted,
+            ),
+            const SizedBox(height: 12),
+            Text(title,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: textSecondary,
+                ),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 4),
+            Text(subtitle,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 12,
+                  color: textMuted,
+                ),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DexSection extends StatelessWidget {
   const _DexSection({
-    required this.title,
+    required this.rarity,
     required this.cards,
     required this.onTap,
     required this.onDelete,
   });
 
-  final String title;
+  final Rarity rarity;
   final List<DexCardData> cards;
   final void Function(DexCardData) onTap;
   final Future<void> Function(DexCardData) onDelete;
 
+  String get _title => switch (rarity) {
+        Rarity.common => 'Common',
+        Rarity.rare => 'Rare',
+        Rarity.epic => 'Epic',
+        Rarity.legendary => 'Legendary',
+      };
+
+  bool get _isSpecial => rarity == Rarity.rare || rarity == Rarity.legendary;
+
   @override
   Widget build(BuildContext context) {
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      sliver: SliverList(
-        delegate: SliverChildListDelegate([
-          Padding(
-            padding: const EdgeInsets.only(top: 14, bottom: 10),
-            child: Text(title.toUpperCase(),
-                style: GoogleFonts.spaceGrotesk(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: textMuted,
-                  letterSpacing: 1,
-                )),
+    final accent = _rarityAccent(rarity);
+
+    // SliverMainAxisGroup lets this widget contribute multiple slivers
+    // (header + grid) as one logical unit inside the parent
+    // CustomScrollView, while keeping the grid itself a real SliverGrid
+    // — built lazily, only as cards scroll into view — rather than the
+    // previous GridView.count(shrinkWrap: true), which eagerly built
+    // every card (including its image decode) up front regardless of
+    // whether it was visible. That eager build was a real cost for
+    // anyone with a large collection, especially on lower-end devices.
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+          sliver: SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 14, bottom: 10),
+              child: _isSpecial
+                  ? Row(
+                      children: [
+                        Icon(
+                          rarity == Rarity.legendary
+                              ? Icons.auto_awesome
+                              : Icons.diamond_outlined,
+                          size: 14,
+                          color: accent,
+                        ),
+                        const SizedBox(width: 6),
+                        ShaderMask(
+                          shaderCallback: (bounds) => LinearGradient(
+                            colors: [accent, accent.withOpacity(0.55)],
+                          ).createShader(bounds),
+                          child: Text(
+                            '$_title (${cards.length})'.toUpperCase(),
+                            style: GoogleFonts.spaceGrotesk(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text('$_title (${cards.length})'.toUpperCase(),
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: textMuted,
+                        letterSpacing: 1,
+                      )),
+            ),
           ),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.74,
-            children: cards
-                .map((c) => _DexCard(
-                      card: c,
-                      onTap: () => onTap(c),
-                      onDelete: () => onDelete(c),
-                    ))
-                .toList(),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          sliver: SliverGrid(
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.74,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final c = cards[index];
+                return _DexCard(
+                  card: c,
+                  onTap: () => onTap(c),
+                  onDelete: () => onDelete(c),
+                );
+              },
+              childCount: cards.length,
+            ),
           ),
-          const SizedBox(height: 8),
-        ]),
-      ),
+        ),
+      ],
     );
   }
 }
@@ -329,7 +788,30 @@ class _DexCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rarity = card.rarity;
+    final content = _DexCardContent(card: card, onDelete: onDelete);
 
+    // Legendary: static glow + animated shimmer sweep.
+    if (rarity == Rarity.legendary) {
+      return GestureDetector(
+        onTap: onTap,
+        onLongPress: onDelete,
+        child: _LegendaryCardShell(child: content),
+      );
+    }
+
+    // Rare: static glow only — cheap, no animation, safe at any grid size.
+    if (rarity == Rarity.rare) {
+      return GestureDetector(
+        onTap: onTap,
+        onLongPress: onDelete,
+        child: _GlowCardShell(
+          accent: _rarityAccent(rarity),
+          child: content,
+        ),
+      );
+    }
+
+    // Common / Epic: plain card, no extra decoration.
     return GestureDetector(
       onTap: onTap,
       onLongPress: onDelete,
@@ -340,124 +822,322 @@ class _DexCard extends StatelessWidget {
           border: Border.all(color: borderColor),
         ),
         clipBehavior: Clip.hardEdge,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Image area
-            SizedBox(
-              height: 90,
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: (card.photoPath?.isNotEmpty ?? false)
-                        ? Image.file(
-                            File(card.photoPath!),
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) =>
-                                _CardFallback(rarity: rarity),
-                          )
-                        : _CardFallback(rarity: rarity),
-                  ),
-                  // Rarity pill — top right
-                  Positioned(
-                    top: 7,
-                    right: 7,
-                    child: RarityBadge(rarity),
-                  ),
-                  // Delete button — top left
-                  Positioned(
-                    top: 7,
-                    left: 7,
-                    child: GestureDetector(
-                      onTap: onDelete,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.35),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Icons.delete_outline,
-                            size: 14, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Body
-            Padding(
-              padding: const EdgeInsets.fromLTRB(11, 9, 11, 11),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    card.commonName,
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: textPrimary,
-                      height: 1.2,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    card.scientificName ?? '',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 11,
-                      color: textMuted,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today,
-                          size: 10, color: textMuted),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          _formatDate(card.caughtAt),
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 10,
-                            color: textMuted,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Row(
-                    children: [
-                      const Icon(Icons.location_on_outlined,
-                          size: 10, color: textMuted),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          card.location.isNotEmpty
-                              ? card.location
-                              : 'Location unavailable',
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 10,
-                            color: textMuted,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+        child: content,
+      ),
+    );
+  }
+}
+
+/// Static glow shell for Rare cards: gradient border + soft outer glow.
+/// Pure decoration, no animation — safe to repeat across an entire grid.
+class _GlowCardShell extends StatelessWidget {
+  const _GlowCardShell({required this.accent, required this.child});
+
+  final Color accent;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withOpacity(0.35),
+              blurRadius: 14,
+              spreadRadius: 0.5,
             ),
           ],
         ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [accent.withOpacity(0.9), accent.withOpacity(0.35)],
+            ),
+          ),
+          padding: const EdgeInsets.all(1.4),
+          child: Container(
+            decoration: BoxDecoration(
+              color: surface,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            clipBehavior: Clip.hardEdge,
+            child: child,
+          ),
+        ),
       ),
+    );
+  }
+}
+
+/// Legendary shell: same static glow treatment as Rare, plus a slow
+/// shimmer sweep across the card. Animation is scoped to this single
+/// widget (one AnimationController per Legendary card), so cost scales
+/// only with how many Legendary catches are visible — typically very few.
+class _LegendaryCardShell extends StatefulWidget {
+  const _LegendaryCardShell({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_LegendaryCardShell> createState() => _LegendaryCardShellState();
+}
+
+class _LegendaryCardShellState extends State<_LegendaryCardShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFFFF6432); // legendary accent
+    // RepaintBoundary isolates this card's repeated shimmer repaints so
+    // they don't force neighboring grid cells to repaint too — matters
+    // more on lower-end devices where every avoided repaint counts,
+    // especially while the grid is scrolling.
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: accent.withOpacity(0.45),
+              blurRadius: 18,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [accent, Color(0xFFFFC864)],
+            ),
+          ),
+          padding: const EdgeInsets.all(1.6),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(11),
+            child: Stack(
+              children: [
+                Container(color: surface, child: widget.child),
+                // Shimmer sweep overlay — a translucent diagonal gradient
+                // band that sweeps across the card. Painted directly (not
+                // via ShaderMask) so it composites as a simple highlight
+                // tint rather than replacing pixels underneath.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedBuilder(
+                      animation: _ctrl,
+                      builder: (context, _) {
+                        final t = _ctrl.value;
+                        final dx = (t * 2.6) - 0.8;
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment(-1 + dx, -1),
+                              end: Alignment(0 + dx, 1),
+                              colors: [
+                                Colors.white.withOpacity(0),
+                                Colors.white.withOpacity(0.22),
+                                Colors.white.withOpacity(0),
+                              ],
+                              stops: const [0.35, 0.5, 0.65],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DexCardContent extends StatelessWidget {
+  const _DexCardContent({required this.card, required this.onDelete});
+
+  final DexCardData card;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final rarity = card.rarity;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Image area
+        SizedBox(
+          height: 90,
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: (card.photoPath?.isNotEmpty ?? false)
+                    ? Image.file(
+                        File(card.photoPath!),
+                        fit: BoxFit.cover,
+                        // Card thumbnail is ~90px tall — decoding the full
+                        // multi-megapixel camera photo here is pure waste
+                        // and is the main source of grid scroll jank,
+                        // especially on lower-end devices. Capping the
+                        // decode target size means the image decoder does
+                        // far less work per card, while still looking
+                        // sharp at this display size (2x for device
+                        // pixel ratio headroom).
+                        cacheWidth: 220,
+                        cacheHeight: 220,
+                        errorBuilder: (_, __, ___) =>
+                            _CardFallback(rarity: rarity),
+                      )
+                    : _CardFallback(rarity: rarity),
+              ),
+              // Rarity pill — top right
+              Positioned(
+                top: 7,
+                right: 7,
+                child: RarityBadge(rarity),
+              ),
+              // Delete button — top left
+              Positioned(
+                top: 7,
+                left: 7,
+                child: GestureDetector(
+                  onTap: onDelete,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.35),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: const Icon(Icons.delete_outline,
+                        size: 14, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Body
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(11, 9, 11, 11),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  card.commonName,
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary,
+                    height: 1.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  card.scientificName ?? '',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11,
+                    color: textMuted,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    const Icon(Icons.calendar_today,
+                        size: 10, color: textMuted),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        _formatDate(card.caughtAt),
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 10,
+                          color: textMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined,
+                        size: 10, color: textMuted),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        card.location.isNotEmpty
+                            ? card.location
+                            : 'Location unavailable',
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 10,
+                          color: textMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                const Divider(color: borderColor, height: 1),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniStat(
+                        icon: Icons.track_changes,
+                        label: '${card.confidencePercent}%',
+                        color: green600,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _MiniStat(
+                        icon: Icons.bolt,
+                        label: '+${card.xpReward} XP',
+                        color: amber,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -498,6 +1178,48 @@ class _PlantMiniIcon extends StatelessWidget {
           bottomLeft: Radius.circular(999),
           bottomRight: Radius.circular(8),
         ),
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        color: surface2,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              label,
+              style: GoogleFonts.spaceMono(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }

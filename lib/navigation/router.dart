@@ -5,9 +5,11 @@ import '../screens/scan_screen.dart';
 import '../screens/detect_result_screen.dart';
 import '../screens/catch_success_screen.dart';
 import '../screens/dex_screen.dart';
+import '../screens/plant_detail_screen.dart';
 import '../screens/map_screen.dart';
 import '../screens/profile_screen.dart';
 import '../repositories/plant_repository.dart';
+import '../models/caught_plant.dart';
 import '../widgets/bottom_nav_shell.dart';
 
 final _shellKey = GlobalKey<NavigatorState>();
@@ -33,6 +35,15 @@ final router = GoRouter(
       builder: (context, state) => CatchSuccessScreen(
         args: state.extra,
       ),
+    ),
+    GoRoute(
+      parentNavigatorKey: _rootKey,
+      path: '/dex/detail',
+      builder: (context, state) {
+        // DexScreen pushes: context.push('/dex/detail', extra: caughtPlant)
+        final plant = state.extra as CaughtPlant;
+        return PlantDetailScreen(plant: plant);
+      },
     ),
 
     // Bottom-nav shell

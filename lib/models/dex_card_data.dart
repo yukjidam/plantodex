@@ -23,4 +23,20 @@ class DexCardData {
   /// Where this plant was caught. Left blank until the location feature
   /// is wired up — UI should render this even when empty.
   String get location => '';
+
+  /// Identification confidence, 0-100.
+  int get confidencePercent => caught.confidencePercent;
+
+  /// Taxonomic family, used for search filtering.
+  String get family => caught.family;
+
+  /// XP reward for this catch. Placeholder values until the profile/XP
+  /// module is implemented — safe to swap out later without touching
+  /// callers.
+  int get xpReward => switch (rarity) {
+        Rarity.common => 40,
+        Rarity.rare => 120,
+        Rarity.epic => 200,
+        Rarity.legendary => 350,
+      };
 }

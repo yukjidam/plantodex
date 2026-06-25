@@ -40,7 +40,17 @@ class _ScanScreenState extends State<ScanScreen>
   bool _isCapturing = false;
   bool _flashOn = false;
   // Null until the first frame is analysed, so the pill stays hidden.
-  FrameQuality? _quality;
+  //
+  // This is a ValueNotifier rather than plain State + setState on purpose:
+  // the camera's image stream pushes a new quality reading many times per
+  // second, and only _QualityPill actually needs that value. Routing it
+  // through setState() would rebuild the entire camera screen — live
+  // preview, vignette, grid overlay, top bar, viewfinder animation,
+  // bottom controls, all of it — on every single frame analysed, which is
+  // a very real source of jank, especially on lower-end devices already
+  // busy running the camera's image stream in the background. A
+  // ValueListenableBuilder scoped to just the pill avoids all of that.
+  final _quality = ValueNotifier<FrameQuality?>(null);
   bool _isCropping = false;
 
   // ── Tap-to-focus ───────────────────────────────────────────────────────────
@@ -233,7 +243,10 @@ class _ScanScreenState extends State<ScanScreen>
 
   Future<void> _startLiveQualityCheck() async {
     _qualitySub ??= _frameQuality.qualityStream.listen((q) {
-      if (mounted) setState(() => _quality = q);
+      // Updates the notifier directly — no setState, so this doesn't
+      // rebuild the whole screen on every analysed frame. Only the
+      // ValueListenableBuilder wrapping _QualityPill reacts to this.
+      _quality.value = q;
     });
     await _camera.startImageStream(_frameQuality.onFrame);
   }
@@ -260,6 +273,7 @@ class _ScanScreenState extends State<ScanScreen>
     _frameQuality.dispose();
     _shutterSound.dispose();
     _camera.dispose();
+    _quality.dispose();
     super.dispose();
   }
 
@@ -510,7 +524,15 @@ class _ScanScreenState extends State<ScanScreen>
                 // Live quality pill — only shown when a plant frame is
                 // detected (non-good states that are purely about lighting
                 // or blur are still surfaced so the user can act on them).
-                _QualityPill(quality: _quality),
+                //
+                // Scoped with ValueListenableBuilder so the dozens of
+                // quality updates per second from the camera stream only
+                // rebuild this small widget, not the whole camera screen.
+                ValueListenableBuilder<FrameQuality?>(
+                  valueListenable: _quality,
+                  builder: (context, quality, _) =>
+                      _QualityPill(quality: quality),
+                ),
 
                 const Spacer(),
 
