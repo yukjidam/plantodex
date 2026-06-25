@@ -5,7 +5,7 @@
 Point your camera at a plant, identify it, and catch it into your growing personal Dex — complete with rarity badges, species info, and a world of flora to discover.
 
 ![Status](https://img.shields.io/badge/status-active%20development-brightgreen)
-![Phase](https://img.shields.io/badge/phase-6%20Polish-blue)
+![Phase](https://img.shields.io/badge/phase-7%20Map-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
 ![Language](https://img.shields.io/badge/language-Dart%20%2F%20Flutter-7F52FF?logo=dart&logoColor=white)
 
@@ -22,7 +22,7 @@ Plant ID apps are purely utilitarian: point, identify, done. PlantoDex turns tha
 | Catch wild Pokémon | Scan real plants |
 | Pokédex | PlantoDex |
 | Rarity tiers | Rarity badges (Common → Legendary) |
-| Gym / Map | Map of where you scanned each plant *(planned)* |
+| Gym / Map | Map of where you scanned each plant |
 | Trainer profile | Profile screen *(planned)* |
 
 Every scan adds to a personal collection instead of disappearing into a search history. A walk becomes a chance to find something new to catch.
@@ -32,10 +32,10 @@ Every scan adds to a personal collection instead of disappearing into a search h
 ## Core Loop
 
 ```
-📷 Scan  →  🔍 Identify  →  ✨ Catch  →  📖 Collect
+📷 Scan  →  🔍 Identify  →  ✨ Catch  →  📖 Collect  →  🗺️ Explore
 ```
 
-Everything else — the map, the profile, the streaks — is in service of this loop, not a distraction from it.
+Everything else — the profile, the streaks — is in service of this loop, not a distraction from it.
 
 ---
 
@@ -48,6 +48,8 @@ Everything else — the map, the profile, the streaks — is in service of this 
 | Networking | http |
 | Local Storage | Floor (SQLite ORM) |
 | Architecture | Provider + Repository pattern |
+| Map | flutter_map (OpenStreetMap) |
+| GPS | geolocator |
 
 ### APIs
 
@@ -56,6 +58,7 @@ Everything else — the map, the profile, the streaks — is in service of this 
 | Pl@ntNet | Plant identification from photo | ✅ Active |
 | Wikipedia | Species descriptions & reference data | ✅ Active |
 | GBIF | Occurrence-based rarity classification | ✅ Active |
+| OpenStreetMap | Free map tiles (no API key) | ✅ Active |
 | ~~Perenual~~ | Plant species information | ❌ Replaced |
 | ~~Trefle~~ | Plant species information | ❌ Replaced |
 
@@ -84,8 +87,52 @@ Four-tab bottom navigation:
 |---|---|
 | 📷 **Scan** | Camera capture + identification flow |
 | 📖 **Dex** | Personal collection album, sorted and grouped by rarity |
-| 🗺️ **Map** | Where each plant was scanned *(planned)* |
+| 🗺️ **Map** | Where each plant was scanned — rarity-colored pins, tap to view detail |
 | 👤 **Profile** | Levels, achievements, streaks *(planned)* |
+
+---
+
+## Map Feature
+
+The Map tab shows every caught plant pinned to the location where it was scanned, using **OpenStreetMap tiles via `flutter_map`** — fully free, no API key required.
+
+### Pin design
+
+| Rarity | Pin color | Extra treatment |
+|---|---|---|
+| 🌿 Common | Green | Standard pin |
+| 🌸 Epic | Pink | Standard pin |
+| 💜 Rare | Purple | Soft glow halo |
+| 🔥 Legendary | Orange | Bright glow halo |
+
+Tapping a pin surfaces a compact info card showing the plant's name, scientific name, rarity badge, and catch date. The card links through to the full plant detail screen (same as tapping a Dex card).
+
+### Architecture
+
+```
+MapScreen
+  ├── flutter_map (OSM tile layer)
+  ├── MarkerLayer  ←  List<MapCatchMarker>
+  │     └── CatchMarkerWidget (rarity-colored pin)
+  ├── Info card overlay (tapped pin)
+  ├── MapLegendWidget (bottom-left)
+  └── Re-center FAB
+MapRepository       ←  wraps Floor CaughtPlantDao stream
+LocationService     ←  wraps geolocator
+MapCatchMarker      ←  display model (maps from CaughtPlant entity)
+```
+
+### Wiring checklist (to complete Phase 7)
+
+- [ ] Add `flutter_map`, `latlong2`, `geolocator`, `intl` to `pubspec.yaml` (see `PUBSPEC_ADDITIONS.yaml`)
+- [ ] Add `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` to `AndroidManifest.xml`
+- [ ] Add `latitude` + `longitude` columns to `CaughtPlant` Floor entity + migration
+- [ ] Record device location at scan time and persist to the new columns
+- [ ] Uncomment `MapRepository.watchAll()` body and inject `CaughtPlantDao`
+- [ ] Uncomment `LocationService.getCurrentLocation()` body
+- [ ] Replace `_dummyMarkers` in `MapScreen` with `MapRepository.watchAll()` stream
+- [ ] Replace `_initialCenter` fallback with real device location
+- [ ] Wire info card arrow → `PlantDetailScreen(id: marker.plantId)`
 
 ---
 
@@ -100,7 +147,8 @@ Four-tab bottom navigation:
 | Java/Kotlin | JDK 17 (`sourceCompatibility` / `kotlinOptions.jvmTarget`) |
 | Camera | Required (core scan flow) |
 | Storage | Local SQLite via Floor — collection grows with usage |
-| Network | Required for identification (Pl@ntNet, Wikipedia, GBIF); offline state is handled gracefully but scanning needs connectivity |
+| Network | Required for identification (Pl@ntNet, Wikipedia, GBIF) and map tiles (OSM); offline state is handled gracefully but scanning and the map need connectivity |
+| Location | Optional — map falls back to a default center if GPS is unavailable or denied |
 
 ---
 
@@ -132,7 +180,7 @@ Four-tab bottom navigation:
 - Rarity pill on every card, determined by GBIF at catch time
 - Delete with confirmation dialog
 
-### 🚧 Phase 6 — Polish *(in progress)*
+### ✅ Phase 6 — Polish
 * [x] GBIF-based dynamic rarity (no hardcoded lists)
 * [x] Flicker-free rarity reveal fully loaded before result screen shows
 * [x] Rarity color theming across all surfaces
@@ -145,13 +193,28 @@ Four-tab bottom navigation:
 * [x] Dex grouped into per-rarity sections, with special gradient styling for Rare/Legendary headers
 * [x] Rare and Legendary catches get distinct card treatment — static glow border for Rare, animated shimmer sweep for Legendary
 * [x] Performance pass: capped image decode resolution on Dex thumbnails and the detail screen's hero image, converted the Dex grid to a lazily-built `SliverGrid`, isolated expensive card repaints behind `RepaintBoundary`, and moved the scan screen's live frame-quality updates off the main `setState` path so the camera UI no longer rebuilds in full on every analysed frame
-* [ ] Catch and scan animations
-* [ ] Performance optimization *(ongoing — see above; image pipeline and camera screen done, further passes as new screens land)*
+* [x] Catch and scan animations
+* [x] Performance optimization
+
+### 🚧 Phase 7 — Map *(in progress)*
+* [x] Map screen skeleton: real OSM tiles rendering via `flutter_map`
+* [x] Static dummy pins with rarity-colored markers and glow treatment for Rare/Legendary
+* [x] Tap-to-show info card overlay with plant name, scientific name, rarity badge, and catch date
+* [x] `MapCatchMarker` display model (maps cleanly from existing `CaughtPlant` Floor entity)
+* [x] `MapRepository` stub (Floor stream wiring commented and ready)
+* [x] `LocationService` stub (geolocator wiring commented and ready)
+* [x] Map legend widget
+* [x] Re-center FAB
+* [ ] Record GPS coordinates at scan time and persist to `CaughtPlant` (requires Floor migration)
+* [ ] Wire `MapRepository` to live Floor stream
+* [ ] Wire `LocationService` to device GPS; center map on current location
+* [ ] Connect info card arrow to `PlantDetailScreen`
+* [ ] Handle offline gracefully — show cached tile fragments, disable re-center when GPS unavailable
 
 ### 🔮 Later
-- Map screen (real implementation)
 - Profile screen (levels, achievements, streaks)
 - Background sync queue for offline catches
+- Map clustering for dense collections
 
 ---
 
@@ -160,7 +223,7 @@ Four-tab bottom navigation:
 - **Make learning about plants feel like progress**, not a chore.
 - **Borrow what makes collecting games satisfying** — rarity tiers, a Dex to fill, a sense of "what haven't I found yet" — and apply it to something genuinely useful.
 - **Encourage going outside and looking closer.** Every walk is a chance to find a new catch.
-- **Keep the core loop simple.** Scan → identify → catch → collect.
+- **Keep the core loop simple.** Scan → identify → catch → collect → explore.
 
 ---
 
