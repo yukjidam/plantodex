@@ -190,8 +190,8 @@ MapCatchMarker      ←  display model (maps from CaughtPlant entity)
 * [x] Dedicated plant detail screen, opened from the Dex, with a tap-to-zoom full-screen photo viewer
 * [x] Functional Dex search (name, scientific name, family)
 * [x] Rarity filter chips and sort control (newest, A–Z, rarity) on the Dex
-* [x] Dex grouped into per-rarity sections, with special gradient styling for Rare/Legendary headers
-* [x] Rare and Legendary catches get distinct card treatment — static glow border for Rare, animated shimmer sweep for Legendary
+* [x] Dex grouped into per-rarity sections
+* [x] Rare and Legendary catches get a distinct solid-color border in their rarity accent — simpler than it sounds: an earlier gradient-border + glow-shadow shell, and later an animated shimmer sweep on Legendary, were both tried and then deliberately removed once profiling showed they weren't worth their render cost on lower-end devices (see Phase 7 performance pass below)
 * [x] Performance pass: capped image decode resolution on Dex thumbnails and the detail screen's hero image, converted the Dex grid to a lazily-built `SliverGrid`, isolated expensive card repaints behind `RepaintBoundary`, and moved the scan screen's live frame-quality updates off the main `setState` path so the camera UI no longer rebuilds in full on every analysed frame
 * [x] Catch and scan animations
 * [x] Performance optimization
@@ -205,6 +205,7 @@ MapCatchMarker      ←  display model (maps from CaughtPlant entity)
 * [x] `LocationService` stub (geolocator wiring commented and ready)
 * [x] Map legend widget
 * [x] Re-center FAB
+* [x] **Performance pass — Map ↔ Dex navigation jank:**
 * [ ] Record GPS coordinates at scan time and persist to `CaughtPlant` (requires Floor migration)
 * [ ] Wire `MapRepository` to live Floor stream
 * [ ] Wire `LocationService` to device GPS; center map on current location
