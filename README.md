@@ -2,7 +2,7 @@
 
 # 🌿 PlantoDex
 **A Pokémon GO-inspired plant collection app for Android.**  
-Point your camera at a plant, identify it, and catch it into your growing personal Dex — complete with rarity badges, species info, and a world of flora to discover.
+Point your camera at a plant, identify it, and catch it into your growing personal Dex — complete with rarity badges, species info, and a live map of every plant you've ever found.
 
 ![Status](https://img.shields.io/badge/status-active%20development-brightgreen)
 ![Phase](https://img.shields.io/badge/phase-7%20Map-blue)
@@ -50,6 +50,7 @@ Everything else — the profile, the streaks — is in service of this loop, not
 | Architecture | Provider + Repository pattern |
 | Map | flutter_map (OpenStreetMap) |
 | GPS | geolocator |
+| Reverse Geocoding | geocoding |
 
 ### APIs
 
@@ -94,7 +95,7 @@ Four-tab bottom navigation:
 
 ## Map Feature
 
-The Map tab shows every caught plant pinned to the location where it was scanned, using **OpenStreetMap tiles via `flutter_map`** — fully free, no API key required.
+The Map tab shows every caught plant pinned to the location where it was scanned, using **OpenStreetMap tiles via `flutter_map`** — fully free, no API key required. GPS coordinates are captured at scan time and persisted alongside each catch.
 
 ### Pin design
 
@@ -105,50 +106,47 @@ The Map tab shows every caught plant pinned to the location where it was scanned
 | 💜 Rare | Purple | Soft glow halo |
 | 🔥 Legendary | Orange | Bright glow halo |
 
-Tapping a pin surfaces a compact info card showing the plant's name, scientific name, rarity badge, and catch date. The card links through to the full plant detail screen (same as tapping a Dex card).
+Tapping a pin surfaces a compact info card showing the plant's name, scientific name, rarity badge, catch date, and resolved place name (e.g. "Poblacion, Tarlac City"). The card links through to the full plant detail screen.
+
+### Stacked pin handling
+
+When multiple plants are caught at nearly the same location, pins are automatically spread into a small circle so every pin remains individually visible and tappable — no zooming required.
 
 ### Architecture
 
 ```
 MapScreen
   ├── flutter_map (OSM tile layer)
-  ├── MarkerLayer  ←  List<MapCatchMarker>
+  ├── MarkerLayer  ←  List<MapCatchMarker> (spread-deduped)
   │     └── CatchMarkerWidget (rarity-colored pin)
-  ├── Info card overlay (tapped pin)
+  ├── MarkerLayer  ←  live user location dot (blue)
+  ├── Info card overlay (tapped pin → place name via GeocodingService)
+  ├── Empty state overlay (no catches with GPS yet)
   ├── MapLegendWidget (bottom-left)
-  └── Re-center FAB
+  └── Re-center FAB (centers on catch cluster, falls back to GPS)
 MapRepository       ←  wraps Floor CaughtPlantDao stream
 LocationService     ←  wraps geolocator
+GeocodingService    ←  reverse geocoding with in-memory cache
 MapCatchMarker      ←  display model (maps from CaughtPlant entity)
 ```
-
-### Wiring checklist (to complete Phase 7)
-
-- [ ] Add `flutter_map`, `latlong2`, `geolocator`, `intl` to `pubspec.yaml` (see `PUBSPEC_ADDITIONS.yaml`)
-- [ ] Add `ACCESS_FINE_LOCATION` + `ACCESS_COARSE_LOCATION` to `AndroidManifest.xml`
-- [ ] Add `latitude` + `longitude` columns to `CaughtPlant` Floor entity + migration
-- [ ] Record device location at scan time and persist to the new columns
-- [ ] Uncomment `MapRepository.watchAll()` body and inject `CaughtPlantDao`
-- [ ] Uncomment `LocationService.getCurrentLocation()` body
-- [ ] Replace `_dummyMarkers` in `MapScreen` with `MapRepository.watchAll()` stream
-- [ ] Replace `_initialCenter` fallback with real device location
-- [ ] Wire info card arrow → `PlantDetailScreen(id: marker.plantId)`
 
 ---
 
 ## System Requirements
 
-| Requirement | Value |
+These are the minimum hardware and software requirements to **run** PlantoDex on an Android device.
+
+| Requirement | Minimum |
 |---|---|
-| Minimum Android version | Determined by Flutter's default `minSdkVersion` for the installed SDK (not pinned in `build.gradle.kts` — it delegates to `flutter.minSdkVersion`). Not yet pinned down exactly; run `flutter build apk` and check the merged manifest, or hardcode `minSdk` in `android/app/build.gradle.kts` for a guaranteed number. |
-| Target / Compile SDK | Android API 36 (resolved from installed Android SDK 36.1.0 via `flutter.targetSdkVersion` / `flutter.compileSdkVersion`) |
-| Flutter SDK | 3.41.6 (stable channel) |
-| Dart SDK | `>=3.3.0 <4.0.0` (per `pubspec.yaml`); 3.11.4 installed |
-| Java/Kotlin | JDK 17 (`sourceCompatibility` / `kotlinOptions.jvmTarget`) |
-| Camera | Required (core scan flow) |
-| Storage | Local SQLite via Floor — collection grows with usage |
-| Network | Required for identification (Pl@ntNet, Wikipedia, GBIF) and map tiles (OSM); offline state is handled gracefully but scanning and the map need connectivity |
-| Location | Optional — map falls back to a default center if GPS is unavailable or denied |
+| **Android version** | Android 6.0 (Marshmallow, API 23) |
+| **RAM** | 2 GB |
+| **Storage** | 100 MB free (grows with collection size) |
+| **Camera** | Required — any rear camera supported |
+| **GPS / Location** | Required for map pins; app functions without it but plants won't appear on the map |
+| **Internet** | Required for plant identification (Pl@ntNet, Wikipedia, GBIF) and map tiles; offline state is handled gracefully |
+| **Processor** | Any ARMv7 or ARM64 chipset (covers virtually all Android phones since 2013) |
+
+> Location permission can be set to "While using the app" — PlantoDex never requests background location.
 
 ---
 
@@ -182,40 +180,43 @@ MapCatchMarker      ←  display model (maps from CaughtPlant entity)
 
 ### ✅ Phase 6 — Polish
 * [x] GBIF-based dynamic rarity (no hardcoded lists)
-* [x] Flicker-free rarity reveal fully loaded before result screen shows
+* [x] Flicker-free rarity reveal — fully loaded before result screen shows
 * [x] Rarity color theming across all surfaces
 * [x] Improved plant scanning and identification flow
-* [x] Added animated loading screens with unique themes for each rarity tier
-* [x] Enhanced Dex cards with additional plant information (catch date, location placeholder, ID confidence, XP)
-* [x] Dedicated plant detail screen, opened from the Dex, with a tap-to-zoom full-screen photo viewer
+* [x] Animated loading screens with unique themes for each rarity tier
+* [x] Enhanced Dex cards with additional plant information (catch date, location, ID confidence, XP)
+* [x] Dedicated plant detail screen with tap-to-zoom full-screen photo viewer
 * [x] Functional Dex search (name, scientific name, family)
 * [x] Rarity filter chips and sort control (newest, A–Z, rarity) on the Dex
-* [x] Dex grouped into per-rarity sections
-* [x] Rare and Legendary catches get a distinct solid-color border in their rarity accent — simpler than it sounds: an earlier gradient-border + glow-shadow shell, and later an animated shimmer sweep on Legendary, were both tried and then deliberately removed once profiling showed they weren't worth their render cost on lower-end devices (see Phase 7 performance pass below)
-* [x] Performance pass: capped image decode resolution on Dex thumbnails and the detail screen's hero image, converted the Dex grid to a lazily-built `SliverGrid`, isolated expensive card repaints behind `RepaintBoundary`, and moved the scan screen's live frame-quality updates off the main `setState` path so the camera UI no longer rebuilds in full on every analysed frame
+* [x] Dex grouped into per-rarity sections with styled section headers
+* [x] Rare and Legendary catches get a solid-color rarity-accent border
+* [x] Performance pass: capped image decode resolution on Dex thumbnails and hero image, converted Dex grid to lazily-built `SliverGrid`, isolated expensive card repaints behind `RepaintBoundary`, moved scan frame-quality updates off the main `setState` path
 * [x] Catch and scan animations
-* [x] Performance optimization
 
-### 🚧 Phase 7 — Map *(in progress)*
-* [x] Map screen skeleton: real OSM tiles rendering via `flutter_map`
-* [x] Static dummy pins with rarity-colored markers and glow treatment for Rare/Legendary
-* [x] Tap-to-show info card overlay with plant name, scientific name, rarity badge, and catch date
-* [x] `MapCatchMarker` display model (maps cleanly from existing `CaughtPlant` Floor entity)
-* [x] `MapRepository` stub (Floor stream wiring commented and ready)
-* [x] `LocationService` stub (geolocator wiring commented and ready)
+### ✅ Phase 7 — Map
+* [x] Map screen with real OSM tiles via `flutter_map`
+* [x] Rarity-colored pins with glow treatment for Rare/Legendary catches
+* [x] Tap-to-show info card overlay with plant name, scientific name, rarity badge, catch date, and resolved place name
+* [x] `MapCatchMarker` display model mapping cleanly from `CaughtPlant` Floor entity
+* [x] `MapRepository` wired to live Floor DB stream — map updates in real time
+* [x] `LocationService` wired to device GPS
+* [x] GPS coordinates captured at scan time and persisted to `CaughtPlant` (Floor DB migration v1→v2)
+* [x] Map centers on catch cluster on load; falls back to GPS then Tarlac City default
+* [x] Re-center FAB centers on catch cluster first, GPS fallback second
+* [x] Stacked pin spreading — nearby catches arranged in a circle so every pin is tappable without zooming
+* [x] Live user location dot (blue) rendered as a separate marker layer
+* [x] Reverse geocoding via `geocoding` package — pins and Dex cards show place names instead of raw coordinates, with in-memory cache to avoid redundant lookups
+* [x] Place name shown in Dex card location row and plant detail screen
+* [x] Info card arrow wired to `PlantDetailScreen`
+* [x] Empty state overlay when no catches with GPS exist yet
+* [x] `minZoom` raised from 13 to 4 — can zoom out to see catches across regions
 * [x] Map legend widget
-* [x] Re-center FAB
-* [x] **Performance pass — Map ↔ Dex navigation jank:**
-* [ ] Record GPS coordinates at scan time and persist to `CaughtPlant` (requires Floor migration)
-* [ ] Wire `MapRepository` to live Floor stream
-* [ ] Wire `LocationService` to device GPS; center map on current location
-* [ ] Connect info card arrow to `PlantDetailScreen`
-* [ ] Handle offline gracefully — show cached tile fragments, disable re-center when GPS unavailable
+* [x] Info card image renders local photo file correctly
 
 ### 🔮 Later
 - Profile screen (levels, achievements, streaks)
 - Background sync queue for offline catches
-- Map clustering for dense collections
+- Push notification for rare plant sightings nearby
 
 ---
 
