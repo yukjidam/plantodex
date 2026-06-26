@@ -143,12 +143,9 @@ lib/
 
 ---
 
-## What's Next
+## About
 
-- **Seasonal badges** — time-gated achievements for FOMO and urgency
-- **Shareable trainer card** — export your level, title, and top badges as an image
-- **Settings screen** — theme toggle, data export, clear collection
-- **Offline catch queue** — scan without signal, sync when back online
+PlantoDex is a personal project — built solo, for fun, and out of genuine curiosity about what happens when you mix biodiversity data with the collecting loop that makes games like Pokémon GO so hard to put down. No team, no deadlines. Just a dev who wanted to make going outside feel like an adventure.
 
 ---
 
