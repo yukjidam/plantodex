@@ -5,7 +5,7 @@
 Point your camera at a plant, identify it, and catch it into your growing personal Dex — complete with rarity badges, species info, and a live map of every plant you've ever found.
 
 ![Status](https://img.shields.io/badge/status-active%20development-brightgreen)
-![Phase](https://img.shields.io/badge/phase-8%20Profile-blue)
+![Phase](https://img.shields.io/badge/phase-9%20Home-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
 ![Language](https://img.shields.io/badge/language-Dart%20%2F%20Flutter-7F52FF?logo=dart&logoColor=white)
 
@@ -35,7 +35,7 @@ Every scan adds to a personal collection instead of disappearing into a search h
 📷 Scan  →  🔍 Identify  →  ✨ Catch  →  📖 Collect  →  🗺️ Explore
 ```
 
-Everything else — the profile, the streaks — is in service of this loop, not a distraction from it.
+Everything else — the profile, the streaks, the home dashboard — is in service of this loop, not a distraction from it.
 
 ---
 
@@ -82,16 +82,67 @@ This means geographically restricted endemics — like Philippine Rafflesia or W
 
 ## App Structure
 
-Four-tab bottom navigation:
+Five-tab bottom navigation:
 
 | Tab | Description |
 |---|---|
-| 📷 **Scan** | Camera capture + identification flow |
+| 🏠 **Home** | Session dashboard — daily quest, last catch, collection snapshot, streak, recent spots |
 | 📖 **Dex** | Personal collection album, sorted and grouped by rarity |
+| 📷 **Scan** | Camera capture + identification flow (center FAB-style tab) |
 | 🗺️ **Map** | Where each plant was scanned — rarity-colored pins, tap to view detail |
 | 👤 **Profile** | Levels, achievements (badges), streaks |
 
-A **Home screen** is planned as a future fifth surface — see [Roadmap → Later](#-later) below.
+---
+
+## Home Screen
+
+The Home tab is the session-level dashboard — it answers "what's happening right now" rather than duplicating the lifetime stats on Profile. It opens with a time-of-day greeting and contextual nature hint, then surfaces the cards most relevant to the current session.
+
+### Cards
+
+| Card | Description |
+|---|---|
+| **Today at a Glance** | Three stat pills: catches today, XP earned today, total plants |
+| **Daily Quest** | One rotating goal (rarity target, scan count, family challenge, etc.) with a progress bar and Go Scan shortcut. Resets at midnight, awards bonus XP on completion |
+| **Last Catch Trophy** | Hero photo card of the most recent caught plant — name, scientific name, rarity badge, place name, and time elapsed |
+| **Collection Snapshot** | Stacked rarity bar + per-rarity counts + most-caught family insight |
+| **Next Badge Nudge** | The single closest-to-unlocking badge with a live progress bar |
+| **Recent Spots** | 2–3 place name chips of recent scan locations, tappable to open Map centered on that spot |
+
+### Daily Quest pool
+
+Quests rotate daily from a fixed pool, seeded by the day of year so every user sees the same quest on a given day:
+
+| # | Quest | Reward |
+|---|---|---|
+| 1 | Catch any plant today | +20 XP |
+| 2 | Catch 3 plants today | +40 XP |
+| 3 | Catch 5 plants today | +70 XP |
+| 4 | Catch 1 Epic or higher plant | +50 XP |
+| 5 | Catch 1 Rare or higher plant | +80 XP |
+| 6 | Find a Legendary plant | +150 XP |
+| 7 | Catch a plant from a new family | +60 XP |
+| 8 | Catch 2 plants from the same family | +40 XP |
+| 9 | Catch a plant you've never caught before (new species) | +50 XP |
+| 10 | Catch a plant in a new location | +60 XP |
+| 11 | Catch plants in 2 different locations today | +70 XP |
+| 12 | Catch 3 plants before noon | +50 XP |
+| 13 | Make your first catch of the day | +20 XP |
+| 14 | Catch an Orchid family plant | +45 XP |
+| 15 | Catch a fern (Polypodiaceae / Pteridaceae / Aspleniaceae) | +45 XP |
+
+### Architecture
+
+```
+HomeScreen
+  ├── SliverToBoxAdapter  ←  header (title + streak pill)
+  ├── _TodayRow           ←  3 stat pills (today catches / XP / total)
+  ├── _DailyQuestCard     ←  rotating quest + progress bar + Go Scan CTA
+  ├── _LastCatchTrophy    ←  hero photo + rarity badge + place name
+  ├── _CollectionSnapshot ←  stacked rarity bar + counts + top family
+  ├── _NextBadgeNudge     ←  closest locked badge + progress bar
+  └── _RecentSpots        ←  recent place name chips → Map deeplink
+```
 
 ---
 
@@ -282,12 +333,27 @@ These are the minimum hardware and software requirements to **run** PlantoDex on
 * [x] **Ancient Tree avatar** — `🌳` avatar unlocked by the Centurion badge (100 catches)
 * [x] All profile data derived live from the Floor `CaughtPlant` stream — zero separate unlock-tracking tables
 
+### 🚧 Phase 9 — Home Screen
+* [x] 5-tab bottom nav restructure: Home · Dex · Scan · Map · Profile
+* [x] Scan tab rendered as a raised green circle FAB in the center of the nav bar
+* [x] Home screen scaffold with `surface` background + `surface2` cards matching Profile design language
+* [x] Plain `SafeArea` header with `spaceMono` title and streak pill — no `SliverAppBar`, consistent with Profile
+* [x] `_TodayRow` — three stat pills (catches today / XP today / total plants)
+* [x] `_DailyQuestCard` — rotating daily quest with progress bar, reset timer, reward XP, and Go Scan CTA
+* [x] `_LastCatchTrophy` — hero photo card with gradient overlay, rarity badge, place name, time elapsed
+* [x] `_CollectionSnapshot` — stacked rarity bar + per-rarity counts + top family insight
+* [x] `_NextBadgeNudge` — closest locked badge with live progress bar
+* [x] `_RecentSpots` — recent place name rows with Map deeplink chevrons
+* [ ] Wire all cards to live `CaughtPlant` Floor stream
+* [ ] Daily quest engine — day-seeded rotation, progress tracking, midnight reset, `shared_preferences` persistence
+* [ ] Last catch trophy wired to real photo + place name
+* [ ] Recent spots wired to real GPS/geocoding data
+* [ ] Go Scan CTA navigates to Scan tab
+
 ### 🔮 Later
-- **Home screen** (new 5th tab) — a dashboard/landing surface distinct from Profile, focused on session-level activity rather than lifetime stats:
-  - Weekly/monthly recap card (e.g. "This week: 4 catches, 1 new family, streak → 5 days")
-  - Shareable export card — render trainer level/title/top badges as an image for sharing
-  - Settings/account section (theme, data export, clear collection)
 - **Seasonal badges** — time-gated achievements (e.g. 🎃 Harvest Moon: catch 5 plants in October) for urgency and FOMO
+- **Shareable trainer card** — render level/title/top badges as an exportable image
+- Settings screen (theme, data export, clear collection)
 - Background sync queue for offline catches
 - Push notification for rare plant sightings nearby
 
