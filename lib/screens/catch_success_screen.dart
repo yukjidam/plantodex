@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
 import '../theme/rarity.dart';
 import '../repositories/plant_repository.dart';
+import '../widgets/bottom_nav_shell.dart';
 import 'catch_success_args.dart';
 
 class CatchSuccessScreen extends StatefulWidget {
@@ -459,7 +460,14 @@ class _CatchSuccessScreenState extends State<CatchSuccessScreen>
                     width: 260,
                     height: 52,
                     child: OutlinedButton(
-                      onPressed: () => context.go('/dex'),
+                      onPressed: () {
+                        // Pop back to the shell, then switch to the Dex tab.
+                        // context.go('/dex') no longer works — /dex is not a
+                        // route, it's managed by IndexedStack inside the shell.
+                        context.pop(); // /catch → /detect
+                        context.pop(); // /detect → shell (/home)
+                        BottomNavShell.switchTab(context, 1); // 1 = Dex
+                      },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: rarity.color,
                         side: BorderSide(

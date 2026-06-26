@@ -339,7 +339,7 @@ class _DexScreenBody extends StatelessWidget {
                 rarity: rarity,
                 cards: grouped[rarity]!,
                 onTap: (c) {
-                  context.push('/dex/detail', extra: c.caught);
+                  context.push('/home/dex/detail', extra: c.caught);
                 },
                 onDelete: onDelete,
               ),

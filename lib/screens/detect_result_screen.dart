@@ -699,7 +699,7 @@ class _SaveCatchButtonState extends State<_SaveCatchButton> {
 
       if (context.mounted) {
         context.push(
-          '/catch',
+          '/home/detect/catch',
           extra: CatchSuccessArgs(result: widget.result, rarity: widget.rarity),
         );
       }

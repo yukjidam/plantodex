@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/colors.dart';
@@ -9,6 +8,7 @@ import '../providers/home_provider.dart';
 import '../models/caught_plant.dart';
 import '../models/seasonal_quest.dart';
 import '../models/daily_quest.dart';
+import '../widgets/bottom_nav_shell.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // How-to-play onboarding
@@ -776,7 +776,7 @@ class _SeasonalQuestCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: () => context.go('/scan'),
+                    onPressed: () => BottomNavShell.switchTab(context, 2),
                     style: FilledButton.styleFrom(
                       backgroundColor: green600,
                       foregroundColor: Colors.white,

@@ -39,6 +39,12 @@ class _ScanScreenState extends State<ScanScreen>
   _ScreenState _screenState = _ScreenState.checkingPermission;
   bool _isCapturing = false;
   bool _flashOn = false;
+  // True only when the app genuinely went to background (paused/inactive).
+  // Navigation pops also trigger AppLifecycleState.resumed, so without this
+  // flag a tab switch back to ScanScreen would fire a full camera reinit
+  // while _capture() is already restarting the stream — causing a race that
+  // locks the camera hardware after several scans.
+  bool _didBackground = false;
   // Null until the first frame is analysed, so the pill stays hidden.
   //
   // This is a ValueNotifier rather than plain State + setState on purpose:
@@ -222,7 +228,7 @@ class _ScanScreenState extends State<ScanScreen>
   Future<void> _pickFromGallery() async {
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null || !mounted) return;
-    context.push('/detect', extra: File(picked.path));
+    context.push('/home/detect', extra: File(picked.path));
   }
 
   StreamSubscription<FrameQuality>? _qualitySub;
@@ -268,11 +274,17 @@ class _ScanScreenState extends State<ScanScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
+      _didBackground = true;
       _camera.pause();
     } else if (state == AppLifecycleState.resumed) {
-      // Full reinit rather than resume() — the controller may have been
-      // disposed while the app was backgrounded or navigated away.
-      _startCamera();
+      // Only do a full reinit when the app truly went to background.
+      // Navigation pops (e.g. returning from another tab) also fire
+      // resumed — without this guard that would race with _capture()'s
+      // own restart path and lock the camera hardware.
+      if (_didBackground) {
+        _didBackground = false;
+        _startCamera();
+      }
     }
   }
 
@@ -338,10 +350,12 @@ class _ScanScreenState extends State<ScanScreen>
       }
 
       if (!mounted) return;
-      await context.push('/detect', extra: toSend);
-      // Stream was stopped before capture; restart it now that we're back.
+      await context.push('/home/detect', extra: toSend);
+      // Stream was stopped before capture. Use _startCamera() for the full
+      // reinit path — avoids racing with a lifecycle-triggered reinit if the
+      // OS fired paused/resumed during the /detect screen's lifetime.
       if (mounted && _screenState == _ScreenState.ready) {
-        await _startLiveQualityCheck();
+        await _startCamera();
       }
     } catch (e) {
       if (mounted) {

@@ -1,33 +1,64 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
 
-const _tabs = [
-  (path: '/home', icon: Icons.home_outlined, label: 'Home'),
-  (path: '/dex', icon: Icons.menu_book_outlined, label: 'Dex'),
-  (path: '/scan', icon: Icons.camera_alt_outlined, label: 'Scan'),
-  (path: '/map', icon: Icons.map_outlined, label: 'Map'),
-  (path: '/profile', icon: Icons.person_outline, label: 'Profile'),
-];
+// Screens
+import '../screens/home_screen.dart';
+import '../screens/dex_screen.dart';
+import '../screens/scan_screen.dart';
+import '../screens/map_screen.dart';
+import '../screens/profile_screen.dart';
 
-class BottomNavShell extends StatelessWidget {
-  const BottomNavShell({
-    super.key,
-    required this.location,
-    required this.child,
-  });
+class BottomNavShell extends StatefulWidget {
+  const BottomNavShell({super.key});
 
-  final String location;
-  final Widget child;
+  /// Switch to a tab from anywhere without go_router.
+  /// Usage: BottomNavShell.switchTab(context, 1); // 0=Home 1=Dex 2=Scan 3=Map 4=Profile
+  static void switchTab(BuildContext context, int index) {
+    context.findAncestorStateOfType<_BottomNavShellState>()?.switchTab(index);
+  }
 
-  int get _currentIndex =>
-      _tabs.indexWhere((t) => location.startsWith(t.path)).clamp(0, 4);
+  @override
+  State<BottomNavShell> createState() => _BottomNavShellState();
+}
+
+class _BottomNavShellState extends State<BottomNavShell> {
+  int _currentIndex = 0;
+
+  void switchTab(int index) {
+    if (index != _currentIndex) {
+      setState(() => _currentIndex = index);
+    }
+  }
+
+  // All screens are kept alive inside an IndexedStack — they are never
+  // destroyed when switching tabs. This is critical for ScanScreen: using
+  // go_router's context.go() rebuilds the destination from scratch on every
+  // tap, which disposes and reinitialises the CameraController repeatedly
+  // until the OS camera hardware locks up ("Could not start camera").
+  static const _screens = [
+    HomeScreen(),
+    DexScreen(),
+    ScanScreen(),
+    MapScreen(),
+    ProfileScreen(),
+  ];
+
+  static const _tabs = [
+    (icon: Icons.home_outlined, label: 'Home'),
+    (icon: Icons.menu_book_outlined, label: 'Dex'),
+    (icon: Icons.camera_alt_outlined, label: 'Scan'),
+    (icon: Icons.map_outlined, label: 'Map'),
+    (icon: Icons.person_outline, label: 'Profile'),
+  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: child,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _screens,
+      ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: surface,
@@ -42,7 +73,7 @@ class BottomNavShell extends StatelessWidget {
                 final selected = i == _currentIndex;
                 return Expanded(
                   child: GestureDetector(
-                    onTap: () => context.go(tab.path),
+                    onTap: () => switchTab(i),
                     behavior: HitTestBehavior.opaque,
                     child: i == 2
                         // ── Centre Scan tab — raised camera button ──────────
