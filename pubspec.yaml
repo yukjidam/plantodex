@@ -70,6 +70,10 @@ dependencies:
   geolocator: ^13.0.2
   geocoding: ^3.0.0
 
+  # --- Phase 8 additions (Profile) ---
+  # Small local persistence: seen-badge tracking + selected avatar
+  shared_preferences: ^2.3.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
