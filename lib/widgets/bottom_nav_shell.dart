@@ -4,10 +4,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
 
 const _tabs = [
-  (path: '/scan',    icon: Icons.camera_alt_outlined,  label: 'Scan'),
-  (path: '/dex',     icon: Icons.menu_book_outlined,    label: 'Dex'),
-  (path: '/map',     icon: Icons.map_outlined,          label: 'Map'),
-  (path: '/profile', icon: Icons.person_outline,        label: 'Profile'),
+  (path: '/home', icon: Icons.home_outlined, label: 'Home'),
+  (path: '/dex', icon: Icons.menu_book_outlined, label: 'Dex'),
+  (path: '/scan', icon: Icons.camera_alt_outlined, label: 'Scan'),
+  (path: '/map', icon: Icons.map_outlined, label: 'Map'),
+  (path: '/profile', icon: Icons.person_outline, label: 'Profile'),
 ];
 
 class BottomNavShell extends StatelessWidget {
@@ -21,7 +22,7 @@ class BottomNavShell extends StatelessWidget {
   final Widget child;
 
   int get _currentIndex =>
-      _tabs.indexWhere((t) => location.startsWith(t.path)).clamp(0, 3);
+      _tabs.indexWhere((t) => location.startsWith(t.path)).clamp(0, 4);
 
   @override
   Widget build(BuildContext context) {
@@ -43,27 +44,55 @@ class BottomNavShell extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () => context.go(tab.path),
                     behavior: HitTestBehavior.opaque,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          tab.icon,
-                          size: 22,
-                          color: selected ? green600 : textMuted,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          tab.label,
-                          style: GoogleFonts.spaceGrotesk(
-                            fontSize: 10,
-                            fontWeight: selected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: selected ? green600 : textMuted,
+                    child: i == 2
+                        // ── Centre Scan tab — raised camera button ──────────
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: selected ? green600 : green500,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: green600.withOpacity(0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  tab.icon,
+                                  size: 22,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          )
+                        // ── Regular tabs ────────────────────────────────────
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                tab.icon,
+                                size: 22,
+                                color: selected ? green600 : textMuted,
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                tab.label,
+                                style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 10,
+                                  fontWeight: selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: selected ? green600 : textMuted,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
                   ),
                 );
               }),

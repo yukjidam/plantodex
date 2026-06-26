@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../screens/home_screen.dart';
 import '../screens/scan_screen.dart';
 import '../screens/detect_result_screen.dart';
 import '../screens/catch_success_screen.dart';
@@ -17,7 +18,7 @@ final _rootKey = GlobalKey<NavigatorState>();
 
 final router = GoRouter(
   navigatorKey: _rootKey,
-  initialLocation: '/scan',
+  initialLocation: '/home',
   routes: [
     // Full-screen routes (no bottom nav)
     GoRoute(
@@ -53,12 +54,16 @@ final router = GoRouter(
           BottomNavShell(location: state.uri.path, child: child),
       routes: [
         GoRoute(
-          path: '/scan',
-          builder: (context, state) => const ScanScreen(),
+          path: '/home',
+          builder: (context, state) => const HomeScreen(),
         ),
         GoRoute(
           path: '/dex',
           builder: (context, state) => const DexScreen(),
+        ),
+        GoRoute(
+          path: '/scan',
+          builder: (context, state) => const ScanScreen(),
         ),
         GoRoute(
           path: '/map',
