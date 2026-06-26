@@ -29,28 +29,26 @@ That's it. Everything else — streaks, badges, a home dashboard, a live map —
 
 ## Screenshots
 
-### 🏠 Home
-<p align="center">
-  <img src="docs/assets/home_1.jpg" width="30%" />
-  &nbsp;&nbsp;
-  <img src="docs/assets/home_2.jpg" width="30%" />
-</p>
-
-### 📷 Scan &nbsp;&nbsp;&nbsp; 📖 Dex &nbsp;&nbsp;&nbsp; 🗺️ Map
-<p align="center">
-  <img src="docs/assets/scan.jpg" width="28%" />
-  &nbsp;&nbsp;
-  <img src="docs/assets/dex.jpg" width="28%" />
-  &nbsp;&nbsp;
-  <img src="docs/assets/map.jpg" width="28%" />
-</p>
-
-### 👤 Profile
-<p align="center">
-  <img src="docs/assets/profile_1.jpg" width="30%" />
-  &nbsp;&nbsp;
-  <img src="docs/assets/profile_2.jpg" width="30%" />
-</p>
+<table align="center">
+  <tr>
+    <th align="center">🏠 Home</th>
+    <th align="center">🏠 Home</th>
+    <th align="center">📷 Scan</th>
+    <th align="center">📖 Dex</th>
+    <th align="center">🗺️ Map</th>
+    <th align="center">👤 Profile</th>
+    <th align="center">👤 Profile</th>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/home_1.jpg" width="120" /></td>
+    <td><img src="docs/assets/home_2.jpg" width="120" /></td>
+    <td><img src="docs/assets/scan.jpg" width="120" /></td>
+    <td><img src="docs/assets/dex.jpg" width="120" /></td>
+    <td><img src="docs/assets/map.jpg" width="120" /></td>
+    <td><img src="docs/assets/profile_1.jpg" width="120" /></td>
+    <td><img src="docs/assets/profile_2.jpg" width="120" /></td>
+  </tr>
+</table>
 
 ---
 
