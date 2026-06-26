@@ -68,8 +68,11 @@ class PlantRepository {
 
   // ── Identification flow ────────────────────────────────────────────────────
 
-  /// Calls Pl@ntNet then Wikipedia and returns a bundled [PlantResult].
-  Future<PlantResult> identify(File photo) async {
+  /// Stage 1 — calls Pl@ntNet only. Throws [NotAPlantException] if confidence
+  /// is too low, or [PlantNetNoMatchException] / [PlantNetQuotaExceededException]
+  /// from the service. The provider calls this first, then updates its status
+  /// to [DetectionStatus.fetchingInfo] before calling [fetchCareInfo].
+  Future<PlantIdentification> identifyOnly(File photo) async {
     final identification = await _plantNet.identify(photo);
 
     // A very low confidence score means it's probably not a plant at all.
@@ -77,6 +80,11 @@ class PlantRepository {
       throw const NotAPlantException();
     }
 
+    return identification;
+  }
+
+  /// Stage 2 — fetches Wikipedia care info for an already-identified plant.
+  Future<PlantResult> fetchCareInfo(PlantIdentification identification) async {
     final careInfo =
         await _wikipedia.fetchByScientificName(identification.scientificName);
 
@@ -84,6 +92,14 @@ class PlantRepository {
       identification: identification,
       careInfo: careInfo,
     );
+  }
+
+  /// Convenience method that runs both stages in sequence.
+  /// Prefer calling [identifyOnly] + [fetchCareInfo] separately when you need
+  /// to show intermediate loading states.
+  Future<PlantResult> identify(File photo) async {
+    final identification = await identifyOnly(photo);
+    return fetchCareInfo(identification);
   }
 
   void dispose() {

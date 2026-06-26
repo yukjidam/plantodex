@@ -231,18 +231,30 @@ class _ScanScreenState extends State<ScanScreen>
   Future<void> _startCamera() async {
     try {
       setState(() => _screenState = _ScreenState.loading);
+      // Always fully dispose before reinitialising — the screen may have been
+      // unmounted (e.g. /detect pushed on root navigator tears down ScanScreen)
+      // leaving the CameraController in a broken/disposed state. Reinitialising
+      // without disposing first locks the camera hardware on most devices.
+      await _qualitySub?.cancel();
+      _qualitySub = null;
+      await _camera.dispose();
       await _camera.init();
       if (!mounted) return;
       setState(() => _screenState = _ScreenState.ready);
       _scheduleViewfinderRectMeasurement();
       await _startLiveQualityCheck();
     } catch (e) {
+      debugPrint('[ScanScreen] _startCamera error: $e');
       if (mounted) setState(() => _screenState = _ScreenState.error);
     }
   }
 
   Future<void> _startLiveQualityCheck() async {
-    _qualitySub ??= _frameQuality.qualityStream.listen((q) {
+    if (!mounted) return;
+    // Always cancel the old sub and re-subscribe so we get a fresh listener
+    // even when returning from /detect (where the stream was stopped).
+    await _qualitySub?.cancel();
+    _qualitySub = _frameQuality.qualityStream.listen((q) {
       // Updates the notifier directly — no setState, so this doesn't
       // rebuild the whole screen on every analysed frame. Only the
       // ValueListenableBuilder wrapping _QualityPill reacts to this.
@@ -254,12 +266,13 @@ class _ScanScreenState extends State<ScanScreen>
   // Pause/resume preview when app goes to background/foreground
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
       _camera.pause();
     } else if (state == AppLifecycleState.resumed) {
-      _camera.resume();
-      _startLiveQualityCheck();
-      setState(() {}); // rebuild to refresh preview
+      // Full reinit rather than resume() — the controller may have been
+      // disposed while the app was backgrounded or navigated away.
+      _startCamera();
     }
   }
 
@@ -325,7 +338,11 @@ class _ScanScreenState extends State<ScanScreen>
       }
 
       if (!mounted) return;
-      context.push('/detect', extra: toSend);
+      await context.push('/detect', extra: toSend);
+      // Stream was stopped before capture; restart it now that we're back.
+      if (mounted && _screenState == _ScreenState.ready) {
+        await _startLiveQualityCheck();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -346,6 +363,10 @@ class _ScanScreenState extends State<ScanScreen>
   }
 
   Future<void> _flipCamera() async {
+    // Cancel the existing quality sub before flipping — flipCamera() internally
+    // stops the stream, so the sub would receive no more events anyway.
+    await _qualitySub?.cancel();
+    _qualitySub = null;
     setState(() => _screenState = _ScreenState.loading);
     await _camera.flipCamera();
     if (!mounted) return;

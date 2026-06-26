@@ -1,0 +1,16 @@
+flutter_native_splash:
+  # White background to match the logo
+  color: "#ffffff"
+
+  # Your logo centered on the splash
+  image: assets/plantodex.png
+
+  # Only generate for Android
+  android: true
+  ios: false
+  web: false
+
+  # Use the full-screen immersive mode on Android 12+
+  android_12:
+    color: "#ffffff"
+    image: assets/plantodex.png

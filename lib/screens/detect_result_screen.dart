@@ -61,7 +61,7 @@ class _DetectResultScreenState extends State<DetectResultScreen> {
                 emoji: '🔍',
                 title: "Couldn't identify this one",
                 subtitle:
-                    "Pl\u0040ntNet didn't find a confident match. Try a clearer or closer shot.",
+                    "Couldn't find a confident match. Try a clearer or closer shot.",
                 primaryLabel: 'Scan again',
                 onPrimary: () => context.pop(),
               );
@@ -76,9 +76,10 @@ class _DetectResultScreenState extends State<DetectResultScreen> {
               );
             case DetectionStatus.error:
               return _MessageScaffold(
-                emoji: '⚠️',
-                title: 'Something went wrong',
-                subtitle: provider.errorMessage ?? 'Please try again.',
+                emoji: '🌿',
+                title: 'Hmm, something went sideways',
+                subtitle: provider.errorMessage ??
+                    'The scan did not go through. Check your connection and give it another shot.',
                 primaryLabel: 'Try again',
                 onPrimary: () => provider.identify(widget.photo),
               );
@@ -614,32 +615,21 @@ class _ResultScaffoldBody extends StatelessWidget {
                   _SaveCatchButton(
                       photo: photo, result: result, rarity: rarity),
                   const SizedBox(height: 8),
-                  Row(
-                    children: ['Skip', 'Save for later', 'Share']
-                        .map((lbl) => Expanded(
-                              child: Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                child: OutlinedButton(
-                                  onPressed: lbl == 'Skip'
-                                      ? () => context.pop()
-                                      : () {},
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: textSecondary,
-                                    side: const BorderSide(color: borderColor),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8)),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 11),
-                                  ),
-                                  child: Text(lbl,
-                                      style: GoogleFonts.spaceGrotesk(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500)),
-                                ),
-                              ),
-                            ))
-                        .toList(),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => context.pop(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: textSecondary,
+                        side: const BorderSide(color: borderColor),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 11),
+                      ),
+                      child: Text('Skip',
+                          style: GoogleFonts.spaceGrotesk(
+                              fontSize: 13, fontWeight: FontWeight.w500)),
+                    ),
                   ),
                 ],
               ),

@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/caught_plant.dart';
+import '../models/daily_quest.dart';
+import '../models/seasonal_quest.dart';
 import '../repositories/plant_repository.dart';
 import '../services/geocoding_service.dart';
 
@@ -430,6 +432,94 @@ class HomeProvider extends ChangeNotifier {
     _recentSpots = spots;
     notifyListeners();
   }
+
+  // ── Seasonal quest helpers ────────────────────────────────────────────────
+
+  /// Catches that happened in the current calendar month.
+  List<CaughtPlant> get _monthlyCatches {
+    final now = DateTime.now();
+    return _allCatches.where((p) {
+      final d = p.caughtAtDate;
+      return d.year == now.year && d.month == now.month;
+    }).toList();
+  }
+
+  /// Distinct ~1 km GPS cells seen this month (same grid as recentSpots).
+  Set<String> get _monthlyLocKeys {
+    final keys = <String>{};
+    for (final p in _monthlyCatches) {
+      if (p.latitude != null && p.longitude != null) {
+        keys.add(
+            '${(p.latitude! * 100).round()},${(p.longitude! * 100).round()}');
+      }
+    }
+    return keys;
+  }
+
+  // ── Public getters consumed by home_screen.dart ───────────────────────────
+
+  /// The episode for the current calendar month.
+  SeasonalEpisode get activeEpisode => currentEpisode();
+
+  /// Full progress list — one entry per quest, in order.
+  List<QuestProgress> get questProgressList => computeQuestProgress(
+        episode: activeEpisode,
+        monthlyCatches: _monthlyCatches,
+        distinctLocKeys: _monthlyLocKeys,
+      );
+
+  /// The first quest that isn't completed yet (null if all done).
+  QuestProgress? get activeQuest {
+    try {
+      return questProgressList.firstWhere((qp) => !qp.completed);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// How many quests in the current episode are fully completed.
+  int get completedQuestCount =>
+      questProgressList.where((qp) => qp.completed).length;
+
+  /// Countdown string to end of current month (used in the card timer).
+  String get resetCountdown {
+    final now = DateTime.now();
+    final endOfMonth = DateTime(now.year, now.month + 1, 1)
+        .subtract(const Duration(seconds: 1));
+    final diff = endOfMonth.difference(now);
+
+    if (diff.inDays > 0) {
+      return '${diff.inDays}d ${diff.inHours.remainder(24)}h';
+    }
+    if (diff.inHours > 0) {
+      return '${diff.inHours}h ${diff.inMinutes.remainder(60)}m';
+    }
+    return '${diff.inMinutes}m';
+  }
+
+  // ── Daily quest helpers ───────────────────────────────────────────────────
+
+  /// Distinct ~1 km GPS cells seen today (same grid as recentSpots).
+  Set<String> get _todayLocKeys {
+    final keys = <String>{};
+    for (final p in todayCatches) {
+      if (p.latitude != null && p.longitude != null) {
+        keys.add(
+            '${(p.latitude! * 100).round()},${(p.longitude! * 100).round()}');
+      }
+    }
+    return keys;
+  }
+
+  /// The quest picked for today, rotating from the pool by date.
+  DailyQuest get todayQuest => dailyQuestForToday();
+
+  /// Progress on today's quest.
+  DailyQuestProgress get dailyQuestProgress => computeDailyQuestProgress(
+        quest: todayQuest,
+        todayCatches: todayCatches,
+        distinctLocKeys: _todayLocKeys,
+      );
 
   // ── Load / refresh ────────────────────────────────────────────────────────
 

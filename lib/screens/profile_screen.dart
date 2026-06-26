@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../database/app_database.dart';
 import '../models/caught_plant.dart';
+import '../repositories/plant_repository.dart';
 import '../theme/colors.dart';
+import 'home_screen.dart' show showHowToPlay;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // XP + Level system
@@ -113,6 +118,13 @@ const _badgeFlavorText = <String, String>{
 const _prefsMultiplierExpiryKey = 'profile_xp_multiplier_expiry_ms';
 const double _xpMultiplierValue = 1.5;
 const int _xpMultiplierDays = 7;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// About / developer info
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _githubUsername = 'yukjidam';
+const _appVersion = '1.0.0';
 
 /// Returns true when a stored multiplier expiry is still in the future.
 bool _isMultiplierActive(SharedPreferences prefs) {
@@ -633,6 +645,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _init() async {
+    prefetchGitHubProfile(); // fire-and-forget so modal is instant
     final db = await AppDatabase.getInstance();
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -749,6 +762,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _resetProgress() async {
+    final repo = PlantRepository.instance;
+    final catches = await repo.getAllCatches();
+    for (final c in catches) {
+      await repo.deleteCatch(c);
+    }
+
+    await _prefs?.remove(_prefsSeenBadgesKey);
+    await _prefs?.remove(_prefsBonusXpBadgesKey);
+    await _prefs?.remove(_prefsMultiplierExpiryKey);
+
+    if (mounted) {
+      setState(() {
+        _seenBadgeIds = {};
+        _bonusXpBadgeIds = {};
+        _multiplierActive = false;
+      });
+    }
+  }
+
   void _dismissToast() => setState(() => _toastVisible = false);
 
   @override
@@ -782,18 +815,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       bonusXpBadgeIds: _bonusXpBadgeIds,
                       username: _username,
                       onEditUsername: () => _editUsername(context),
+                      onResetProgress: _resetProgress,
                     ),
                     // Badge unlock toast overlay
                     Positioned(
                       top: MediaQuery.of(context).padding.top + 12,
                       left: 20,
                       right: 20,
-                      child: _BadgeUnlockToast(
-                        visible: _toastVisible,
-                        badgeName: _toastBadgeName ?? '',
-                        flavorText: _toastFlavor ?? '',
-                        bonusXp: _toastBonusXp ?? 0,
-                        onDismiss: _dismissToast,
+                      child: IgnorePointer(
+                        ignoring: !_toastVisible,
+                        child: _BadgeUnlockToast(
+                          visible: _toastVisible,
+                          badgeName: _toastBadgeName ?? '',
+                          flavorText: _toastFlavor ?? '',
+                          bonusXp: _toastBonusXp ?? 0,
+                          onDismiss: _dismissToast,
+                        ),
                       ),
                     ),
                   ],
@@ -819,6 +856,7 @@ class _ProfileBody extends StatelessWidget {
     required this.bonusXpBadgeIds,
     required this.username,
     required this.onEditUsername,
+    required this.onResetProgress,
   });
 
   final _ProfileStats stats;
@@ -830,6 +868,7 @@ class _ProfileBody extends StatelessWidget {
   final Set<String> bonusXpBadgeIds;
   final String username;
   final VoidCallback onEditUsername;
+  final VoidCallback onResetProgress;
 
   void _openBadgeSheet(BuildContext context, BadgeDefinition badge) {
     final unlocked = badge.unlockedWhen(stats);
@@ -861,6 +900,79 @@ class _ProfileBody extends StatelessWidget {
         },
       ),
     );
+  }
+
+  void _openSettingsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => _SettingsSheet(
+        onHowToPlay: () {
+          Navigator.of(sheetContext).pop();
+          showHowToPlay(context);
+        },
+        onResetProgress: () {
+          Navigator.of(sheetContext).pop();
+          _confirmResetProgress(context);
+        },
+        onAbout: () {
+          Navigator.of(sheetContext).pop();
+          showDialog(
+            context: context,
+            builder: (_) => const _AboutDialog(),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmResetProgress(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Reset all progress?',
+            style: GoogleFonts.spaceGrotesk(
+                fontWeight: FontWeight.w700, color: textPrimary)),
+        content: Text(
+          'This permanently deletes every catch, badge, and streak. '
+          'This cannot be undone.',
+          style: GoogleFonts.spaceGrotesk(fontSize: 13, color: textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancel',
+                style: GoogleFonts.spaceGrotesk(color: textMuted)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text('Reset',
+                style: GoogleFonts.spaceGrotesk(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w700,
+                )),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      onResetProgress();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Progress reset.',
+                style: GoogleFonts.spaceGrotesk(color: textPrimary)),
+            backgroundColor: surface2,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   String _dynamicSubtitle(_ProfileStats s) {
@@ -932,50 +1044,54 @@ class _ProfileBody extends StatelessWidget {
                             )),
                       ],
                     ),
-                    // XP pill + optional multiplier chip
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: green100,
-                            borderRadius: BorderRadius.circular(20),
+                        // Optional multiplier chip
+                        if (multiplierActive)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2, right: 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF3E0),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: amber.withOpacity(0.5), width: 1),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Text('🔥',
+                                      style: TextStyle(fontSize: 9)),
+                                  const SizedBox(width: 3),
+                                  Text('1.5× XP',
+                                      style: GoogleFonts.spaceMono(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                        color: amber,
+                                      )),
+                                ],
+                              ),
+                            ),
                           ),
-                          child: Text('${stats.totalXp} XP',
-                              style: GoogleFonts.spaceMono(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: green600,
-                              )),
+                        Builder(
+                          builder: (btnContext) => GestureDetector(
+                            onTap: () => _openSettingsSheet(btnContext),
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: surface2,
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: borderColor),
+                              ),
+                              child: const Icon(Icons.settings_outlined,
+                                  size: 18, color: textSecondary),
+                            ),
+                          ),
                         ),
-                        if (multiplierActive) ...[
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF3E0),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                  color: amber.withOpacity(0.5), width: 1),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Text('🔥', style: TextStyle(fontSize: 9)),
-                                const SizedBox(width: 3),
-                                Text('1.5× XP',
-                                    style: GoogleFonts.spaceMono(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
-                                      color: amber,
-                                    )),
-                              ],
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ],
@@ -985,7 +1101,7 @@ class _ProfileBody extends StatelessWidget {
           ),
         ),
 
-        // ── Trainer card ──────────────────────────────────────────────
+        // ── Botanist card ──────────────────────────────────────────────
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
@@ -1115,7 +1231,7 @@ class _ProfileBody extends StatelessWidget {
                             _InsightChip(
                               icon: '📅',
                               text:
-                                  'Trainer since ${_formatMonthYear(stats.earliestCatch!)}',
+                                  'Collecting since ${_formatMonthYear(stats.earliestCatch!)}',
                             ),
                           if (stats.topFamily != null)
                             _InsightChip(
@@ -1296,7 +1412,7 @@ class _TitlePill extends StatelessWidget {
   }
 }
 
-/// Small pill used for "Trainer since ..." / "Mostly <family>" insights.
+/// Small pill used for "Collecting since ..." / "Mostly <family>" insights.
 class _InsightChip extends StatelessWidget {
   const _InsightChip({required this.icon, required this.text});
   final String icon;
@@ -1761,7 +1877,7 @@ class _BadgeDetailSheet extends StatelessWidget {
   }
 }
 
-/// Bottom sheet for choosing the trainer card avatar. Locked avatars show
+/// Bottom sheet for choosing the botanist card avatar. Locked avatars show
 /// the badge that needs to be unlocked first.
 class _AvatarPickerSheet extends StatelessWidget {
   const _AvatarPickerSheet({
@@ -2475,6 +2591,359 @@ class _ActivityHeatmapCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Settings bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SettingsSheet extends StatelessWidget {
+  const _SettingsSheet({
+    required this.onResetProgress,
+    required this.onAbout,
+    required this.onHowToPlay,
+  });
+
+  final VoidCallback onResetProgress;
+  final VoidCallback onAbout;
+  final VoidCallback onHowToPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: borderColor,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            Text('Settings',
+                style: GoogleFonts.spaceMono(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary,
+                )),
+            const SizedBox(height: 12),
+            _SettingsTile(
+              icon: Icons.help_outline,
+              iconColor: purple,
+              title: 'How to Play',
+              subtitle: 'A quick guide to catching plants',
+              onTap: onHowToPlay,
+            ),
+            _SettingsTile(
+              icon: Icons.restart_alt,
+              iconColor: Colors.red,
+              title: 'Reset Progress',
+              subtitle: 'Permanently delete all your catches',
+              onTap: onResetProgress,
+            ),
+            _SettingsTile(
+              icon: Icons.info_outline,
+              iconColor: green600,
+              title: 'About PlantoDex',
+              subtitle: 'v$_appVersion · built by yukjidam',
+              onTap: onAbout,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  const _SettingsTile({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 18, color: iconColor),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: textPrimary,
+                      )),
+                  Text(subtitle,
+                      style: GoogleFonts.spaceGrotesk(
+                          fontSize: 11, color: textMuted)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18, color: textMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// About dialog — app info + live GitHub profile
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── GitHub profile cache — fetched once at app start ──────────────────────────
+Map<String, dynamic>? _cachedGhUser;
+bool _ghFetchDone = false;
+
+Future<void> prefetchGitHubProfile() async {
+  if (_ghFetchDone) return;
+  _ghFetchDone = true;
+  try {
+    final res = await http
+        .get(Uri.parse('https://api.github.com/users/$_githubUsername'))
+        .timeout(const Duration(seconds: 8));
+    if (res.statusCode == 200) {
+      _cachedGhUser = jsonDecode(res.body) as Map<String, dynamic>;
+    }
+  } catch (_) {}
+}
+
+class _AboutDialog extends StatefulWidget {
+  const _AboutDialog();
+
+  @override
+  State<_AboutDialog> createState() => _AboutDialogState();
+}
+
+class _AboutDialogState extends State<_AboutDialog> {
+  Map<String, dynamic>? _ghUser;
+  bool _loading = true;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_cachedGhUser != null) {
+      _ghUser = _cachedGhUser;
+      _loading = false;
+    } else {
+      _fetchGitHubProfile();
+    }
+  }
+
+  Future<void> _fetchGitHubProfile() async {
+    try {
+      final res = await http
+          .get(Uri.parse('https://api.github.com/users/$_githubUsername'))
+          .timeout(const Duration(seconds: 8));
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        _cachedGhUser = jsonDecode(res.body) as Map<String, dynamic>;
+        setState(() {
+          _ghUser = _cachedGhUser;
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _loading = false;
+          _error = true;
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = true;
+      });
+    }
+  }
+
+  Future<void> _openGitHub() async {
+    final url = (_ghUser?['html_url'] as String?) ??
+        'https://github.com/$_githubUsername';
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final avatarUrl = _ghUser?['avatar_url'] as String?;
+
+    return Dialog(
+      backgroundColor: surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── App logo  ×  GH avatar ─────────────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // App logo
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: borderColor, width: 1.5),
+                  ),
+                  child: const Center(
+                      child: Text('🌿', style: TextStyle(fontSize: 28))),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text('×',
+                      style: GoogleFonts.spaceMono(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: textMuted,
+                      )),
+                ),
+                // GH avatar
+                if (_loading)
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: surface2,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: const Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  )
+                else
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: surface2,
+                    backgroundImage:
+                        avatarUrl != null ? NetworkImage(avatarUrl) : null,
+                    child: avatarUrl == null
+                        ? const Icon(Icons.person, color: textMuted, size: 26)
+                        : null,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text('PlantoDex',
+                style: GoogleFonts.spaceMono(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: textPrimary,
+                )),
+            const SizedBox(height: 2),
+            Text('v$_appVersion',
+                style:
+                    GoogleFonts.spaceGrotesk(fontSize: 11, color: textMuted)),
+            const SizedBox(height: 14),
+            Text(
+              'It started with my mom\'s fake plants. We loved them but had no idea '
+              'what any of them were called. That small mystery turned into this: '
+              'a plant catching app that borrows what makes collecting games fun, '
+              'rarity tiers, a Dex to fill, that itch of "what haven\'t I found yet", '
+              'and points it at something real. Built solo while waiting for graduation, '
+              'because every walk outside deserves a reason to look closer.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 13,
+                color: textSecondary,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Made with ☕ and probably too much love for tiny ui details.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.spaceGrotesk(
+                fontSize: 11,
+                color: textMuted,
+                height: 1.4,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Divider(color: borderColor, height: 1),
+            const SizedBox(height: 14),
+            // ── GitHub button ──────────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _openGitHub,
+                icon: const Icon(Icons.code, size: 16),
+                label: Text('github.com/$_githubUsername',
+                    style: GoogleFonts.spaceMono(fontSize: 12)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: green600,
+                  side: const BorderSide(color: green600),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: Text('Close',
+                    style: GoogleFonts.spaceGrotesk(
+                      color: textMuted,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

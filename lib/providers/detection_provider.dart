@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import '../models/plant_identification.dart'; // PlantIdNoMatchException
+import '../models/plant_identification.dart';
 import '../repositories/plant_repository.dart'; // PlantResult, NotAPlantException
 import '../services/plantnet_service.dart'; // PlantNetQuotaExceededException
 
@@ -32,16 +32,17 @@ class DetectionProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final r = await _repository.identify(photo);
+      final identification = await _repository.identifyOnly(photo);
 
       status = DetectionStatus.fetchingInfo;
       notifyListeners();
 
+      final r = await _repository.fetchCareInfo(identification);
       result = r;
       status = DetectionStatus.success;
     } on NotAPlantException {
       status = DetectionStatus.notAPlant;
-    } on PlantIdNoMatchException {
+    } on PlantNetNoMatchException {
       status = DetectionStatus.noMatch;
     } on PlantNetQuotaExceededException {
       status = DetectionStatus.quotaExceeded;

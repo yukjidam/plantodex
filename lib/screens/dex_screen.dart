@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -227,6 +228,7 @@ class _DexScreenBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stats = sections.stats;
+    final totalXp = sections.all.fold<int>(0, (sum, c) => sum + c.xpReward);
     final isEmpty = sections.all.isEmpty;
     final filtered = _filterCards(sections.all, query, rarityFilter);
     final sorted = _sortCards(filtered, sortOrder);
@@ -275,7 +277,7 @@ class _DexScreenBody extends StatelessWidget {
                             color: green100,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text('248 XP',
+                          child: Text('$totalXp XP',
                               style: GoogleFonts.spaceMono(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -789,29 +791,15 @@ class _DexCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rarity = card.rarity;
-    final content = _DexCardContent(card: card, onDelete: onDelete);
 
-    // Legendary / Rare: just a solid-color border in the rarity's accent
-    // — no gradient, no glow shadow, no extra nested Containers. Visually
-    // distinct at a glance, and cheap: a single Container/BoxDecoration
-    // per card instead of three nested ones plus a blurred shadow.
-    if (rarity == Rarity.legendary || rarity == Rarity.rare) {
-      return GestureDetector(
-        onTap: onTap,
-        onLongPress: onDelete,
-        child: Container(
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _rarityAccent(rarity), width: 1.5),
-          ),
-          clipBehavior: Clip.hardEdge,
-          child: content,
-        ),
-      );
+    if (rarity == Rarity.legendary) {
+      return _LegendaryCard(card: card, onTap: onTap, onDelete: onDelete);
+    }
+    if (rarity == Rarity.rare) {
+      return _RareCard(card: card, onTap: onTap, onDelete: onDelete);
     }
 
-    // Common / Epic: plain card, no extra decoration.
+    // Common / Epic: plain card.
     return GestureDetector(
       onTap: onTap,
       onLongPress: onDelete,
@@ -822,10 +810,288 @@ class _DexCard extends StatelessWidget {
           border: Border.all(color: borderColor),
         ),
         clipBehavior: Clip.hardEdge,
-        child: content,
+        child: _DexCardContent(card: card, onDelete: onDelete),
       ),
     );
   }
+}
+
+// ─── Rare card — sweeping shimmer border ───────────────────────────────────────────
+
+class _RareCard extends StatefulWidget {
+  const _RareCard({
+    required this.card,
+    required this.onTap,
+    required this.onDelete,
+  });
+  final DexCardData card;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  State<_RareCard> createState() => _RareCardState();
+}
+
+class _RareCardState extends State<_RareCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF9A60D0);
+    const radius = BorderRadius.all(Radius.circular(12));
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: widget.onDelete,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) {
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withOpacity(0.25 + 0.15 * _ctrl.value),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: CustomPaint(
+              painter: _ShimmerBorderPainter(
+                progress: _ctrl.value,
+                baseColor: accent.withOpacity(0.55),
+                shimmerColor: Colors.white,
+                borderRadius: 12,
+                strokeWidth: 1.8,
+              ),
+              child: child,
+            ),
+          );
+        },
+        child: ClipRRect(
+          borderRadius: radius,
+          child: _DexCardContent(card: widget.card, onDelete: widget.onDelete),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Legendary card — pulsing glow + shimmer border + corner sparkles ────────────
+
+class _LegendaryCard extends StatefulWidget {
+  const _LegendaryCard({
+    required this.card,
+    required this.onTap,
+    required this.onDelete,
+  });
+  final DexCardData card;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  State<_LegendaryCard> createState() => _LegendaryCardState();
+}
+
+class _LegendaryCardState extends State<_LegendaryCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFFFF6432);
+    const gold = Color(0xFFFFBB33);
+    const radius = BorderRadius.all(Radius.circular(12));
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: widget.onDelete,
+      child: AnimatedBuilder(
+        animation: _ctrl,
+        builder: (_, child) {
+          final pulse = (sin(_ctrl.value * 2 * pi) * 0.5 + 0.5);
+
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withOpacity(0.20 + 0.20 * pulse),
+                  blurRadius: 12 + 6 * pulse,
+                  spreadRadius: 1 + pulse,
+                ),
+                BoxShadow(
+                  color: gold.withOpacity(0.10 + 0.12 * pulse),
+                  blurRadius: 22,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: CustomPaint(
+              foregroundPainter: _SparklesPainter(
+                progress: _ctrl.value,
+                color: gold,
+              ),
+              painter: _ShimmerBorderPainter(
+                progress: _ctrl.value,
+                baseColor: accent.withOpacity(0.7),
+                shimmerColor: gold,
+                borderRadius: 12,
+                strokeWidth: 2.2,
+              ),
+              child: child,
+            ),
+          );
+        },
+        child: ClipRRect(
+          borderRadius: radius,
+          child: _DexCardContent(card: widget.card, onDelete: widget.onDelete),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Painters ────────────────────────────────────────────────────────────────
+
+/// Draws a rounded-rect border with a bright shimmer dot sweeping around it.
+class _ShimmerBorderPainter extends CustomPainter {
+  const _ShimmerBorderPainter({
+    required this.progress,
+    required this.baseColor,
+    required this.shimmerColor,
+    required this.borderRadius,
+    required this.strokeWidth,
+  });
+
+  final double progress;
+  final Color baseColor;
+  final Color shimmerColor;
+  final double borderRadius;
+  final double strokeWidth;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(strokeWidth / 2, strokeWidth / 2, size.width - strokeWidth,
+          size.height - strokeWidth),
+      Radius.circular(borderRadius),
+    );
+
+    // Base border
+    canvas.drawRRect(
+      rRect,
+      Paint()
+        ..color = baseColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth,
+    );
+
+    // Sweeping shimmer arc (~18% of perimeter)
+    final path = Path()..addRRect(rRect);
+    final pm = path.computeMetrics().first;
+    final total = pm.length;
+    const arcFraction = 0.18;
+    final arcLen = total * arcFraction;
+    final start = total * progress;
+
+    for (int i = 0; i < 3; i++) {
+      final pos = (start + i * arcLen * 0.2).remainder(total);
+      final end = pos + arcLen;
+      final segPath = pm.extractPath(pos, end.clamp(0, total));
+      final opacity = 1.0 - i * 0.35;
+
+      canvas.drawPath(
+        segPath,
+        Paint()
+          ..color = shimmerColor.withOpacity(opacity * 0.85)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth + 1.0 - i * 0.5
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ShimmerBorderPainter old) => old.progress != progress;
+}
+
+/// Four tiny sparkle crosses that twinkle at the corners for legendary cards.
+class _SparklesPainter extends CustomPainter {
+  const _SparklesPainter({required this.progress, required this.color});
+
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final corners = [
+      Offset(0, 0),
+      Offset(size.width, 0),
+      Offset(size.width, size.height),
+      Offset(0, size.height),
+    ];
+
+    for (int i = 0; i < corners.length; i++) {
+      final phase = (progress + i * 0.25).remainder(1.0);
+      final twinkle = sin(phase * 2 * pi) * 0.5 + 0.5;
+      if (twinkle < 0.1) continue;
+
+      final paint = Paint()
+        ..color = color.withOpacity(twinkle * 0.9)
+        ..strokeWidth = 1.2
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+
+      final c = corners[i];
+      final s = 5.0 + 3.0 * twinkle;
+      final dx = i == 0 || i == 3 ? -8.0 : 8.0;
+      final dy = i == 0 || i == 1 ? -8.0 : 8.0;
+      final sc = Offset(c.dx + dx, c.dy + dy);
+
+      canvas.drawLine(sc.translate(-s, 0), sc.translate(s, 0), paint);
+      canvas.drawLine(sc.translate(0, -s), sc.translate(0, s), paint);
+      canvas.drawLine(sc.translate(-s * 0.6, -s * 0.6),
+          sc.translate(s * 0.6, s * 0.6), paint);
+      canvas.drawLine(sc.translate(s * 0.6, -s * 0.6),
+          sc.translate(-s * 0.6, s * 0.6), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SparklesPainter old) => old.progress != progress;
 }
 
 class _DexCardContent extends StatefulWidget {

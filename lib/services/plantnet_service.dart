@@ -3,11 +3,19 @@ import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../models/plant_identification.dart';
 
-/// Thrown when Pl@ntNet's daily quota (500 req/day on the free tier) is hit.
+/// Thrown when the identification service's daily quota (500 req/day on the free tier) is hit.
 class PlantNetQuotaExceededException implements Exception {
   const PlantNetQuotaExceededException();
   @override
-  String toString() => 'Pl@ntNet daily quota exceeded.';
+  String toString() => 'Daily identification quota exceeded.';
+}
+
+/// Thrown when the identification service cannot find any matching species for the image.
+/// This is a normal outcome (bad photo, unclear subject) — not an app error.
+class PlantNetNoMatchException implements Exception {
+  const PlantNetNoMatchException();
+  @override
+  String toString() => 'Could not identify a match for this image.';
 }
 
 class PlantNetService {
@@ -49,6 +57,10 @@ class PlantNetService {
     } on DioException catch (e) {
       if (e.response?.statusCode == 429) {
         throw const PlantNetQuotaExceededException();
+      }
+      // 404 means the service found no species match — not an app error.
+      if (e.response?.statusCode == 404) {
+        throw const PlantNetNoMatchException();
       }
       rethrow;
     }
