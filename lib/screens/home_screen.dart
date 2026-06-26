@@ -1,11 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../theme/colors.dart';
+import '../providers/home_provider.dart';
+import '../models/caught_plant.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// home_screen.dart  —  Phase 9 · PlantoDex
+// home_screen.dart  —  Phase 9 · PlantoDex  (LIVE)
 //
-// Placeholder layout — all data is static mock values for design review.
+// All data sourced from HomeProvider → PlantRepository → Floor DB.
+// Stubs still in place: streak, daily quest, next-badge
+// (no model exists yet — clearly marked with TODO).
 // ─────────────────────────────────────────────────────────────────────────────
 
 String _greetingSubtitle() {
@@ -17,91 +24,116 @@ String _greetingSubtitle() {
   return 'Late night. Even fungi count as a find.';
 }
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load on first mount. Use addPostFrameCallback so the provider is already
+    // in the tree before we call notifyListeners().
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<HomeProvider>().load();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: surface,
-      body: CustomScrollView(
-        slivers: [
-          // ── Header — matches Profile screen style exactly ──────────
-          SliverToBoxAdapter(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Home',
-                            style: GoogleFonts.spaceMono(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
-                              color: textPrimary,
-                            ),
+    return Consumer<HomeProvider>(
+      builder: (context, home, _) {
+        return Scaffold(
+          backgroundColor: surface,
+          body: home.loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: green600),
+                )
+              : CustomScrollView(
+                  slivers: [
+                    // ── Header ──────────────────────────────────────────────
+                    SliverToBoxAdapter(
+                      child: SafeArea(
+                        bottom: false,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Home',
+                                      style: GoogleFonts.spaceMono(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w600,
+                                        color: textPrimary,
+                                      ),
+                                    ),
+                                    Text(
+                                      _greetingSubtitle(),
+                                      style: GoogleFonts.spaceGrotesk(
+                                        fontSize: 13,
+                                        color: textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: amberLight,
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  home.currentStreak == 0
+                                      ? '🔥 No streak'
+                                      : '🔥 ${home.currentStreak} day${home.currentStreak == 1 ? '' : 's'}',
+                                  style: GoogleFonts.spaceMono(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: amber,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            _greetingSubtitle(),
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 13,
-                              color: textSecondary,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    // Streak pill — mirrors the XP pill in Profile
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: amberLight,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        '🔥 5 days',
-                        style: GoogleFonts.spaceMono(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: amber,
-                        ),
+
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+                      sliver: SliverList(
+                        delegate: SliverChildListDelegate([
+                          const SizedBox(height: 12),
+                          _TodayRow(home: home),
+                          const SizedBox(height: 14),
+                          const _DailyQuestCard(), // TODO: real quest model
+                          const SizedBox(height: 14),
+                          _LastCatchTrophy(plant: home.lastCatch),
+                          const SizedBox(height: 14),
+                          _CollectionSnapshot(home: home),
+                          const SizedBox(height: 14),
+                          _NextBadgeNudge(home: home),
+                          const SizedBox(height: 14),
+                          _RecentSpots(home: home),
+                        ]),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                const SizedBox(height: 12),
-                const _TodayRow(),
-                const SizedBox(height: 14),
-                const _DailyQuestCard(),
-                const SizedBox(height: 14),
-                const _LastCatchTrophy(),
-                const SizedBox(height: 14),
-                const _CollectionSnapshot(),
-                const SizedBox(height: 14),
-                const _NextBadgeNudge(),
-                const SizedBox(height: 14),
-                const _RecentSpots(),
-              ]),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -109,17 +141,30 @@ class HomeScreen extends StatelessWidget {
 // ── Today at a glance ─────────────────────────────────────────────────────────
 
 class _TodayRow extends StatelessWidget {
-  const _TodayRow();
+  const _TodayRow({required this.home});
+  final HomeProvider home;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _StatPill(emoji: '🌿', label: 'Today', value: '3 catches'),
+        _StatPill(
+          emoji: '🌿',
+          label: 'Today',
+          value: '${home.todayCatchCount} catches',
+        ),
         const SizedBox(width: 8),
-        _StatPill(emoji: '⚡', label: 'XP today', value: '+90 XP'),
+        _StatPill(
+          emoji: '⚡',
+          label: 'XP today',
+          value: '+${home.todayXp} XP',
+        ),
         const SizedBox(width: 8),
-        _StatPill(emoji: '📦', label: 'Total', value: '24 plants'),
+        _StatPill(
+          emoji: '📦',
+          label: 'Total',
+          value: '${home.totalCatchCount} plants',
+        ),
       ],
     );
   }
@@ -173,7 +218,9 @@ class _StatPill extends StatelessWidget {
   }
 }
 
-// ── Daily quest card ──────────────────────────────────────────────────────────
+// ── Daily quest card ─────────────────────────────────────────────────────────
+// TODO: Replace with a real DailyQuest model + QuestProvider (Phase 10+).
+// Keeping static for now so the layout stays intact.
 
 class _DailyQuestCard extends StatelessWidget {
   const _DailyQuestCard();
@@ -255,7 +302,7 @@ class _DailyQuestCard extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: () {},
+              onPressed: () => context.go('/scan'),
               style: FilledButton.styleFrom(
                 backgroundColor: green600,
                 foregroundColor: Colors.white,
@@ -283,10 +330,34 @@ class _DailyQuestCard extends StatelessWidget {
 // ── Last catch trophy ─────────────────────────────────────────────────────────
 
 class _LastCatchTrophy extends StatelessWidget {
-  const _LastCatchTrophy();
+  const _LastCatchTrophy({required this.plant});
+  final CaughtPlant? plant;
 
   @override
   Widget build(BuildContext context) {
+    if (plant == null) {
+      return _Card(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                Text('🌱', style: const TextStyle(fontSize: 36)),
+                const SizedBox(height: 8),
+                Text(
+                  'No catches yet — head outside!',
+                  style:
+                      GoogleFonts.spaceGrotesk(color: textMuted, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    final photoFile = File(plant!.photoPath);
+
     return _Card(
       padding: EdgeInsets.zero,
       child: Column(
@@ -308,27 +379,21 @@ class _LastCatchTrophy extends StatelessWidget {
                 const BorderRadius.vertical(bottom: Radius.circular(14)),
             child: Stack(
               children: [
-                // Placeholder photo area
-                Container(
+                // ── Plant photo ──
+                SizedBox(
                   height: 170,
                   width: double.infinity,
-                  color: green100,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('🌺', style: const TextStyle(fontSize: 48)),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Photo goes here',
-                          style: GoogleFonts.spaceGrotesk(
-                              color: textMuted, fontSize: 11),
+                  child: photoFile.existsSync()
+                      ? Image.file(photoFile, fit: BoxFit.cover)
+                      : Container(
+                          color: green100,
+                          child: Center(
+                            child: Text('🌺',
+                                style: const TextStyle(fontSize: 48)),
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
                 ),
-                // Gradient info overlay
+                // ── Gradient overlay ──
                 Positioned(
                   bottom: 0,
                   left: 0,
@@ -353,7 +418,7 @@ class _LastCatchTrophy extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Waling-waling Orchid',
+                                plant!.commonName,
                                 style: GoogleFonts.spaceGrotesk(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w700,
@@ -362,7 +427,7 @@ class _LastCatchTrophy extends StatelessWidget {
                               ),
                               const SizedBox(height: 1),
                               Text(
-                                'Vanda sanderiana',
+                                plant!.scientificName,
                                 style: GoogleFonts.spaceGrotesk(
                                   color: Colors.white70,
                                   fontSize: 12,
@@ -376,7 +441,7 @@ class _LastCatchTrophy extends StatelessWidget {
                                       size: 11, color: Colors.white54),
                                   const SizedBox(width: 2),
                                   Text(
-                                    'Poblacion, Tarlac City · 2h ago',
+                                    _caughtLabel(plant!),
                                     style: GoogleFonts.spaceGrotesk(
                                       color: Colors.white54,
                                       fontSize: 11,
@@ -388,7 +453,7 @@ class _LastCatchTrophy extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        _RarityBadge(rarity: 'legendary'),
+                        _RarityBadge(rarity: plant!.rarity),
                       ],
                     ),
                   ),
@@ -400,15 +465,36 @@ class _LastCatchTrophy extends StatelessWidget {
       ),
     );
   }
+
+  String _caughtLabel(CaughtPlant p) {
+    final ago = _timeAgo(p.caughtAtDate);
+    if (p.latitude != null && p.longitude != null) {
+      return '${p.latitude!.toStringAsFixed(2)}, ${p.longitude!.toStringAsFixed(2)} · $ago';
+    }
+    return ago;
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
 }
 
 // ── Collection snapshot ───────────────────────────────────────────────────────
 
 class _CollectionSnapshot extends StatelessWidget {
-  const _CollectionSnapshot();
+  const _CollectionSnapshot({required this.home});
+  final HomeProvider home;
 
   @override
   Widget build(BuildContext context) {
+    final total = home.totalCatchCount;
+    // Avoid division by zero when the collection is empty.
+    final safeTotal = total == 0 ? 1 : total;
+
     return _Card(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,31 +508,66 @@ class _CollectionSnapshot extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          // Stacked rarity bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: Row(
-              children: [
-                _BarSegment(flex: 14, color: green400),
-                _BarSegment(flex: 6, color: const Color(0xFFE879B0)),
-                _BarSegment(flex: 3, color: purple),
-                _BarSegment(flex: 1, color: amber),
-              ],
+          // Stacked rarity bar — proportional to real counts.
+          if (total > 0)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Row(
+                children: [
+                  if (home.commonCount > 0)
+                    _BarSegment(
+                        flex: home.commonCount * 100 ~/ safeTotal,
+                        color: green400),
+                  if (home.epicCount > 0)
+                    _BarSegment(
+                        flex: home.epicCount * 100 ~/ safeTotal,
+                        color: const Color(0xFFE879B0)),
+                  if (home.rareCount > 0)
+                    _BarSegment(
+                        flex: home.rareCount * 100 ~/ safeTotal, color: purple),
+                  if (home.legendaryCount > 0)
+                    _BarSegment(
+                        flex: home.legendaryCount * 100 ~/ safeTotal,
+                        color: amber),
+                  // Always keep at least a 1-flex spacer so the row has height.
+                  if (home.commonCount == 0 &&
+                      home.epicCount == 0 &&
+                      home.rareCount == 0 &&
+                      home.legendaryCount == 0)
+                    _BarSegment(flex: 1, color: grayLight),
+                ],
+              ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: Row(
+                children: [_BarSegment(flex: 1, color: grayLight)],
+              ),
             ),
-          ),
           const SizedBox(height: 12),
           Row(
             children: [
               _RarityCount(
-                  emoji: '🌿', label: 'Common', count: 14, color: green500),
+                  emoji: '🌿',
+                  label: 'Common',
+                  count: home.commonCount,
+                  color: green500),
               _RarityCount(
                   emoji: '🌸',
                   label: 'Epic',
-                  count: 6,
+                  count: home.epicCount,
                   color: const Color(0xFFD946A0)),
-              _RarityCount(emoji: '💜', label: 'Rare', count: 3, color: purple),
               _RarityCount(
-                  emoji: '🔥', label: 'Legendary', count: 1, color: amber),
+                  emoji: '💜',
+                  label: 'Rare',
+                  count: home.rareCount,
+                  color: purple),
+              _RarityCount(
+                  emoji: '🔥',
+                  label: 'Legendary',
+                  count: home.legendaryCount,
+                  color: amber),
             ],
           ),
           const SizedBox(height: 10),
@@ -456,15 +577,208 @@ class _CollectionSnapshot extends StatelessWidget {
             children: [
               Icon(Icons.grass_outlined, size: 13, color: textMuted),
               const SizedBox(width: 5),
-              Text(
-                '24 plants · 11 families · Most caught: Orchidaceae',
-                style: GoogleFonts.spaceGrotesk(
-                    color: textSecondary, fontSize: 12),
+              Expanded(
+                child: Text(
+                  total == 0
+                      ? 'No plants yet — go catch something!'
+                      : '$total plants · ${home.families.length} families'
+                          '${home.topFamily.isNotEmpty ? ' · Most caught: ${home.topFamily}' : ''}',
+                  style: GoogleFonts.spaceGrotesk(
+                      color: textSecondary, fontSize: 12),
+                ),
               ),
             ],
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Next badge nudge ──────────────────────────────────────────────────────────
+
+class _NextBadgeNudge extends StatelessWidget {
+  const _NextBadgeNudge({required this.home});
+  final HomeProvider home;
+
+  @override
+  Widget build(BuildContext context) {
+    final allUnlocked = home.nextBadgeTarget == 1 &&
+        home.nextBadgeName == 'All badges unlocked!';
+
+    return _Card(
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: purpleLight,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(home.nextBadgeEmoji,
+                  style: const TextStyle(fontSize: 24)),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'NEXT BADGE',
+                      style: GoogleFonts.spaceGrotesk(
+                        color: textMuted,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const Spacer(),
+                    if (!allUnlocked)
+                      Text(
+                        '${home.nextBadgeCurrent} / ${home.nextBadgeTarget}',
+                        style: GoogleFonts.spaceMono(
+                          color: purple,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  home.nextBadgeName,
+                  style: GoogleFonts.spaceGrotesk(
+                    color: textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
+                if (!allUnlocked) ...[
+                  const SizedBox(height: 5),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: home.nextBadgeProgress,
+                      minHeight: 6,
+                      backgroundColor: purpleLight,
+                      valueColor: AlwaysStoppedAnimation(purple),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    home.nextBadgeHint,
+                    style: GoogleFonts.spaceGrotesk(
+                        color: textMuted, fontSize: 11),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Recent spots ──────────────────────────────────────────────────────────────
+
+class _RecentSpots extends StatelessWidget {
+  const _RecentSpots({required this.home});
+  final HomeProvider home;
+
+  @override
+  Widget build(BuildContext context) {
+    final spots = home.recentSpots;
+
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '🗺️  Recent Spots',
+            style: GoogleFonts.spaceGrotesk(
+              color: textPrimary,
+              fontWeight: FontWeight.w700,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (spots.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Your catch locations will appear here.',
+                style: GoogleFonts.spaceGrotesk(color: textMuted, fontSize: 12),
+              ),
+            )
+          else
+            ...spots.map(
+              (spot) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: green100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Center(
+                        child: Text('📍', style: TextStyle(fontSize: 13)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        spot.label,
+                        style: GoogleFonts.spaceGrotesk(
+                          color: textPrimary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${spot.plantCount} plant${spot.plantCount == 1 ? '' : 's'}',
+                      style:
+                          GoogleFonts.spaceMono(color: textMuted, fontSize: 11),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(Icons.chevron_right, color: textMuted, size: 16),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared primitives ─────────────────────────────────────────────────────────
+
+class _Card extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+  const _Card({required this.child, this.padding});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: surface2,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: child,
     );
   }
 }
@@ -477,7 +791,7 @@ class _BarSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      flex: flex,
+      flex: flex < 1 ? 1 : flex,
       child: Container(height: 9, color: color),
     );
   }
@@ -516,180 +830,6 @@ class _RarityCount extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-// ── Next badge nudge ──────────────────────────────────────────────────────────
-
-class _NextBadgeNudge extends StatelessWidget {
-  const _NextBadgeNudge();
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      child: Row(
-        children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: purpleLight,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(
-              child: Text('🏅', style: TextStyle(fontSize: 24)),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      'NEXT BADGE',
-                      style: GoogleFonts.spaceGrotesk(
-                        color: textMuted,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.6,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '24 / 50',
-                      style: GoogleFonts.spaceMono(
-                        color: purple,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Naturalist',
-                  style: GoogleFonts.spaceGrotesk(
-                    color: textPrimary,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: 0.48,
-                    minHeight: 6,
-                    backgroundColor: purpleLight,
-                    valueColor: AlwaysStoppedAnimation(purple),
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '26 more catches to unlock',
-                  style:
-                      GoogleFonts.spaceGrotesk(color: textMuted, fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Recent spots ──────────────────────────────────────────────────────────────
-
-class _RecentSpots extends StatelessWidget {
-  const _RecentSpots();
-
-  static const _spots = [
-    ('Poblacion, Tarlac City', '8 plants'),
-    ('SM City Tarlac', '5 plants'),
-    ('Urdaneta, Pangasinan', '3 plants'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return _Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '🗺️  Recent Spots',
-            style: GoogleFonts.spaceGrotesk(
-              color: textPrimary,
-              fontWeight: FontWeight.w700,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 10),
-          ..._spots.map(
-            (s) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: green100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text('📍', style: TextStyle(fontSize: 13)),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      s.$1,
-                      style: GoogleFonts.spaceGrotesk(
-                        color: textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    s.$2,
-                    style:
-                        GoogleFonts.spaceMono(color: textMuted, fontSize: 11),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(Icons.chevron_right, color: textMuted, size: 16),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Shared primitives ─────────────────────────────────────────────────────────
-
-class _Card extends StatelessWidget {
-  final Widget child;
-  final EdgeInsetsGeometry? padding;
-  const _Card({required this.child, this.padding});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: padding ?? const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: surface2,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
-      child: child,
     );
   }
 }
