@@ -142,24 +142,41 @@ The Profile tab is the "trainer card" for the app — XP, levels, badges, and ca
 
 Every catch awards XP based on rarity (Common 10 / Epic 30 / Rare 60 / Legendary 150). Total XP maps to a 10-tier level ladder with its own title, from **Seedling** (Lv.1) up to **Legendary Warden** (Lv.10).
 
+### Reward System
+
+Badge unlocks trigger a one-time bonus XP award (20–250 XP depending on the badge). Earning the 7-Day or 30-Day Streak badge grants a **1.5× XP multiplier** for 7 days, shown as a live chip on the header. All reward state is persisted via `shared_preferences`.
+
 ### Badges
 
-A fixed set of badge definitions (collection milestones, rarity milestones, streak milestones, and "discovery" badges like Orchid/Fern/World/Explorer) are evaluated live against current stats — no separate unlock-tracking table needed today.
+A fixed set of badge definitions (collection milestones, rarity milestones, streak milestones, and "discovery" badges like Orchid/Fern/World/Explorer) are evaluated live against current stats. Newly unlocked badges play a **flip card reveal animation** and trigger a **slide-in toast** with flavor text and the bonus XP amount. A "next badge" nudge card below the carousel shows the closest-to-unlocking locked badge with its progress bar.
+
+### Profile Flair
+
+The avatar border upgrades as badge count grows: plain green (0–4) → vine border with leaf accents (5–9) → gold glow ring (10+). The display name is user-editable (tap to rename, persisted locally). The header subtitle is dynamic, reflecting current streak, legendary count, or total catches.
 
 ### Streaks
 
-Current and best streaks are derived from the set of distinct catch-days, with a small week-view of dots showing the last 7 days.
+Current and best streaks are derived from the set of distinct catch-days, with a 7-dot week view and a 10-week activity heatmap.
 
 ### Architecture
 
 ```
 ProfileScreen
   ├── _ProfileStats.fromCatches()   ←  derived from Floor CaughtPlantDao stream
-  ├── Trainer card (avatar, title, level, XP progress bar)
+  ├── _processBadgeRewards()        ←  bonus XP + multiplier + toast on new unlocks
+  ├── Trainer card
+  │     ├── _FlairAvatar (plain / vine / gold tier border)
+  │     ├── Editable display name (tap → AlertDialog → SharedPreferences)
+  │     ├── Dynamic subtitle (streak / legendary count / catch summary)
+  │     ├── Level title pill + optional 🔥 Week Warrior pill
+  │     └── XP progress bar + optional 1.5× multiplier chip
   ├── Collection stat pills + rarity breakdown chips
-  ├── Badges row  ←  List<BadgeDefinition> evaluated against _ProfileStats
+  ├── Badges carousel  ←  List<BadgeDefinition> evaluated against _ProfileStats
+  │     └── _BadgeCard (flip reveal animation on first unlock)
+  ├── _NextBadgeNudge  ←  closest locked milestone badge + progress bar
   ├── Streak card  ←  current/best streak + _WeekDots
-  └── (planned) Heatmap calendar, badge progress, insights, settings
+  ├── Activity heatmap  ←  last 10 weeks, color-intensity scaled to catch density
+  └── _BadgeUnlockToast  ←  slide-in overlay with flavor text + bonus XP chip
 ```
 
 ---
@@ -245,20 +262,32 @@ These are the minimum hardware and software requirements to **run** PlantoDex on
 * [x] Map legend widget
 * [x] Info card image renders local photo file correctly
 
-### 🚧 Phase 8 — Profile
-* [ ] Heatmap-style streak calendar (last ~10 weeks) replacing the single 7-dot week view
-* [ ] Badge progress indicators for milestone badges (e.g. "67/100" for Centurion, "4/7" for 7-Day Streak) instead of plain Locked/Unlocked
-* [ ] "Most-caught family" insight line on the trainer card (e.g. "🌸 Mostly Orchidaceae")
-* [ ] Tap-to-open badge detail bottom sheet (replacing the tooltip, which doesn't work well on touch) showing hint text and tier
-* [ ] "New badge" indicator — track last-seen unlocked badge IDs locally and flag newly unlocked badges
-* [ ] "Trainer since" date on the trainer card, based on earliest catch
-* [ ] Avatar picker for the trainer card — selectable emoji avatars, some gated behind specific badge unlocks
+### ✅ Phase 8 — Profile
+* [x] Heatmap-style activity calendar (last 10 weeks) with color intensity scaled to daily catch density
+* [x] Badge progress indicators for milestone badges (e.g. "67/100" for Centurion, "4/7" for 7-Day Streak)
+* [x] "Most-caught family" insight chip on the trainer card
+* [x] Tap-to-open badge detail bottom sheet with hint text, tier label, and progress bar
+* [x] "New badge" indicator — newly unlocked badges flagged with a NEW pill until tapped
+* [x] "Trainer since" date chip on the trainer card, based on earliest catch
+* [x] Avatar picker — selectable emoji avatars, some gated behind specific badge unlocks
+* [x] **Reward system** — per-badge bonus XP (20–250 XP) awarded once on first unlock, persisted via `shared_preferences`
+* [x] **Badge flip reveal animation** — newly unlocked badges play a Y-axis card flip (back face → front face) using dual independent transforms so text is never in the mirrored zone
+* [x] **Badge unlock toast** — slide-in overlay at top of screen with badge name, flavor text, and `+N XP` chip; auto-dismisses after 3.5 s
+* [x] **XP multiplier** — streak_7 and streak_30 badges grant 1.5× XP for 7 days; shown as a `🔥 1.5× XP` chip next to the XP pill; expiry persisted to prefs
+* [x] **"Next badge" nudge card** — shows the single closest-to-unlocking locked milestone badge with live progress bar and remaining count, tappable to open its detail sheet
+* [x] **Profile flair tiers** — avatar border upgrades based on total unlocked badge count: plain (0–4) → vine with 🍃 leaf accents (5–9) → gold glow ring (10+)
+* [x] **Editable display name** — tap-to-rename dialog (24-char limit), persisted to `shared_preferences`; shows inline ✏️ hint icon
+* [x] **Dynamic header subtitle** — reacts to current streak, legendary count, and total catches instead of a static string
+* [x] **Week Warrior title pill** — `🔥 Week Warrior` pill appears alongside the level title when streak_7 or streak_30 is earned
+* [x] **Ancient Tree avatar** — `🌳` avatar unlocked by the Centurion badge (100 catches)
+* [x] All profile data derived live from the Floor `CaughtPlant` stream — zero separate unlock-tracking tables
 
 ### 🔮 Later
 - **Home screen** (new 5th tab) — a dashboard/landing surface distinct from Profile, focused on session-level activity rather than lifetime stats:
   - Weekly/monthly recap card (e.g. "This week: 4 catches, 1 new family, streak → 5 days")
   - Shareable export card — render trainer level/title/top badges as an image for sharing
   - Settings/account section (theme, data export, clear collection)
+- **Seasonal badges** — time-gated achievements (e.g. 🎃 Harvest Moon: catch 5 plants in October) for urgency and FOMO
 - Background sync queue for offline catches
 - Push notification for rare plant sightings nearby
 
