@@ -5,7 +5,7 @@
 Point your camera at a plant, identify it, and catch it into your growing personal Dex — complete with rarity badges, species info, and a live map of every plant you've ever found.
 
 ![Status](https://img.shields.io/badge/status-active%20development-brightgreen)
-![Phase](https://img.shields.io/badge/phase-7%20Map-blue)
+![Phase](https://img.shields.io/badge/phase-8%20Profile-blue)
 ![Platform](https://img.shields.io/badge/platform-Android-3DDC84?logo=android&logoColor=white)
 ![Language](https://img.shields.io/badge/language-Dart%20%2F%20Flutter-7F52FF?logo=dart&logoColor=white)
 
@@ -23,7 +23,7 @@ Plant ID apps are purely utilitarian: point, identify, done. PlantoDex turns tha
 | Pokédex | PlantoDex |
 | Rarity tiers | Rarity badges (Common → Legendary) |
 | Gym / Map | Map of where you scanned each plant |
-| Trainer profile | Profile screen *(planned)* |
+| Trainer profile | Profile screen — levels, badges, streaks |
 
 Every scan adds to a personal collection instead of disappearing into a search history. A walk becomes a chance to find something new to catch.
 
@@ -89,7 +89,9 @@ Four-tab bottom navigation:
 | 📷 **Scan** | Camera capture + identification flow |
 | 📖 **Dex** | Personal collection album, sorted and grouped by rarity |
 | 🗺️ **Map** | Where each plant was scanned — rarity-colored pins, tap to view detail |
-| 👤 **Profile** | Levels, achievements, streaks *(planned)* |
+| 👤 **Profile** | Levels, achievements (badges), streaks |
+
+A **Home screen** is planned as a future fifth surface — see [Roadmap → Later](#-later) below.
 
 ---
 
@@ -128,6 +130,36 @@ MapRepository       ←  wraps Floor CaughtPlantDao stream
 LocationService     ←  wraps geolocator
 GeocodingService    ←  reverse geocoding with in-memory cache
 MapCatchMarker      ←  display model (maps from CaughtPlant entity)
+```
+
+---
+
+## Profile Feature
+
+The Profile tab is the "trainer card" for the app — XP, levels, badges, and catch streaks, all computed live from the same Floor `CaughtPlant` stream that powers the Dex and Map.
+
+### XP & Levels
+
+Every catch awards XP based on rarity (Common 10 / Epic 30 / Rare 60 / Legendary 150). Total XP maps to a 10-tier level ladder with its own title, from **Seedling** (Lv.1) up to **Legendary Warden** (Lv.10).
+
+### Badges
+
+A fixed set of badge definitions (collection milestones, rarity milestones, streak milestones, and "discovery" badges like Orchid/Fern/World/Explorer) are evaluated live against current stats — no separate unlock-tracking table needed today.
+
+### Streaks
+
+Current and best streaks are derived from the set of distinct catch-days, with a small week-view of dots showing the last 7 days.
+
+### Architecture
+
+```
+ProfileScreen
+  ├── _ProfileStats.fromCatches()   ←  derived from Floor CaughtPlantDao stream
+  ├── Trainer card (avatar, title, level, XP progress bar)
+  ├── Collection stat pills + rarity breakdown chips
+  ├── Badges row  ←  List<BadgeDefinition> evaluated against _ProfileStats
+  ├── Streak card  ←  current/best streak + _WeekDots
+  └── (planned) Heatmap calendar, badge progress, insights, settings
 ```
 
 ---
@@ -213,8 +245,20 @@ These are the minimum hardware and software requirements to **run** PlantoDex on
 * [x] Map legend widget
 * [x] Info card image renders local photo file correctly
 
+### 🚧 Phase 8 — Profile
+* [ ] Heatmap-style streak calendar (last ~10 weeks) replacing the single 7-dot week view
+* [ ] Badge progress indicators for milestone badges (e.g. "67/100" for Centurion, "4/7" for 7-Day Streak) instead of plain Locked/Unlocked
+* [ ] "Most-caught family" insight line on the trainer card (e.g. "🌸 Mostly Orchidaceae")
+* [ ] Tap-to-open badge detail bottom sheet (replacing the tooltip, which doesn't work well on touch) showing hint text and tier
+* [ ] "New badge" indicator — track last-seen unlocked badge IDs locally and flag newly unlocked badges
+* [ ] "Trainer since" date on the trainer card, based on earliest catch
+* [ ] Avatar picker for the trainer card — selectable emoji avatars, some gated behind specific badge unlocks
+
 ### 🔮 Later
-- Profile screen (levels, achievements, streaks)
+- **Home screen** (new 5th tab) — a dashboard/landing surface distinct from Profile, focused on session-level activity rather than lifetime stats:
+  - Weekly/monthly recap card (e.g. "This week: 4 catches, 1 new family, streak → 5 days")
+  - Shareable export card — render trainer level/title/top badges as an image for sharing
+  - Settings/account section (theme, data export, clear collection)
 - Background sync queue for offline catches
 - Push notification for rare plant sightings nearby
 
