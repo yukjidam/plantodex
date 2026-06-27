@@ -13,6 +13,8 @@ PlantoDex turns any walk into a hunt — rarity tiers, a living collection, and 
 ![API](https://img.shields.io/badge/ID%20powered%20by-Pl%40ntNet-4CAF50)
 ![Rarity](https://img.shields.io/badge/rarity%20engine-GBIF-orange)
 
+### 🎮 [Download on itch.io →](https://yukjidam.itch.io/plantodex)
+
 </div>
 
 ---
@@ -121,9 +123,7 @@ XP, 10-tier level ladder (Seedling → Legendary Warden), badge collection with 
 
 > **Requires Android 6.0+ (API 23) · 2 GB RAM · rear camera · internet connection**
 
-1. Grab the latest APK from [Releases](../../releases)
-2. Enable *Install from unknown sources* on your device
-3. Install and go find something Legendary
+**Easiest way:** [Download from itch.io →](https://yukjidam.itch.io/plantodex)
 
 > Location can be set to "While using the app" — PlantoDex never requests background location.
 
@@ -154,5 +154,7 @@ PlantoDex is a personal project — built solo, for fun, and out of genuine curi
 Made with ☕ and probably too much love for tiny UI details.
 
 *Go touch some grass. Catch it while you're there.*
+
+[🎮 Play PlantoDex on itch.io](https://yukjidam.itch.io/plantodex)
 
 </div>
